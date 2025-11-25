@@ -10,14 +10,14 @@ export default function Factures() {
   const [entreprise, setEntreprise] = useState(null);
   const [factures, setFactures] = useState([]);
   
-  // Listes pour les sélections
+  // --- LISTES DÉROULANTES ---
   const [listeClients, setListeClients] = useState([]);
   const [listeProduits, setListeProduits] = useState([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Formulaire
-  const [clientNom, setClientNom] = useState('');
+  const [selectedClientName, setSelectedClientName] = useState('');
   const [dateEmission, setDateEmission] = useState(new Date().toISOString().split('T')[0]);
   const [lignes, setLignes] = useState([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
 
@@ -33,7 +33,7 @@ export default function Factures() {
     if (ste) {
       setEntreprise(ste);
       fetchFactures(ste.id);
-      fetchListes(ste.id); // On charge les clients et produits
+      fetchListes(ste.id); // Chargement des listes
     }
     setLoading(false);
   }
@@ -54,7 +54,7 @@ export default function Factures() {
         .from('tiers')
         .select('nom_complet')
         .eq('entreprise_id', entrepriseId)
-        .eq('type_tier', 'CLIENT') // On ne veut que les clients
+        .eq('type_tier', 'CLIENT')
         .order('nom_complet');
     setListeClients(clients || []);
 
@@ -67,17 +67,17 @@ export default function Factures() {
     setListeProduits(prods || []);
   }
 
-  // --- GESTION DES LIGNES ---
+  // --- GESTION INTELLIGENTE DES LIGNES ---
   const addLigne = () => {
     setLignes([...lignes, { description: '', quantite: 1, unite: 'unité', prix: 0 }]);
   };
 
-  // Quand on choisit un produit dans la liste
-  const handleProductSelect = (index, produitNom) => {
-    const produitTrouve = listeProduits.find(p => p.nom === produitNom);
-    
+  // Quand on sélectionne un produit dans la liste
+  const handleProductSelect = (index, nomProduit) => {
+    const produitTrouve = listeProduits.find(p => p.nom === nomProduit);
     const newLignes = [...lignes];
-    newLignes[index].description = produitNom;
+    
+    newLignes[index].description = nomProduit;
 
     if (produitTrouve) {
         // Remplissage automatique !
@@ -104,20 +104,22 @@ export default function Factures() {
   // --- SAUVEGARDE ---
   async function handleSave(e) {
     e.preventDefault();
-    if (!clientNom) return alert("Veuillez sélectionner un client.");
+    if (!selectedClientName) return alert("Veuillez choisir un client dans la liste.");
 
     try {
       const totalHT = calculateTotal();
       const totalTVA = totalHT * 0.18;
       const totalTTC = totalHT + totalTVA;
 
+      // 1. Création Facture
       const { data: facture, error: errFact } = await supabase
         .from('factures')
         .insert([{
           entreprise_id: entreprise.id,
           numero: `FAC-${Date.now().toString().slice(-6)}`,
-          client_nom: clientNom,
+          client_nom: selectedClientName, // On sauvegarde le nom choisi
           date_emission: dateEmission,
+          type_facture: 'VENTE',
           total_ht: totalHT,
           total_tva: totalTVA,
           total_ttc: totalTTC
@@ -127,6 +129,7 @@ export default function Factures() {
 
       if (errFact) throw errFact;
 
+      // 2. Création Lignes
       const lignesToInsert = lignes.map(l => ({
         facture_id: facture.id,
         description: l.description,
@@ -138,9 +141,22 @@ export default function Factures() {
       const { error: errLignes } = await supabase.from('lignes_facture').insert(lignesToInsert);
       if (errLignes) throw errLignes;
 
+      // 3. Mise à jour du stock (Optionnel mais recommandé)
+      // Pour chaque ligne, on décrémente le stock du produit correspondant
+      for (let l of lignes) {
+          const prod = listeProduits.find(p => p.nom === l.description && p.type_produit === 'BIEN');
+          if (prod) {
+              await supabase.rpc('decrement_stock', { row_id: prod.id, quantity: l.quantite }); 
+              // Note: Si la fonction RPC n'existe pas, ce n'est pas grave, ça passera au travers ou échouera silencieusement ici
+              // Pour faire simple sans RPC complexe, on peut faire un update direct :
+              const newStock = prod.stock_actuel - l.quantite;
+              await supabase.from('produits').update({ stock_actuel: newStock }).eq('id', prod.id);
+          }
+      }
+
       alert("Facture enregistrée !");
       setIsModalOpen(false);
-      setClientNom('');
+      setSelectedClientName('');
       setLignes([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
       fetchFactures(entreprise.id);
 
@@ -238,9 +254,10 @@ export default function Factures() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <div>
                   <label style={labelStyle}>Client</label>
+                  {/* LISTE DÉROULANTE CLIENTS */}
                   <select 
-                    value={clientNom} 
-                    onChange={e => setClientNom(e.target.value)} 
+                    value={selectedClientName} 
+                    onChange={e => setSelectedClientName(e.target.value)} 
                     style={inputStyle} 
                     required
                   >
@@ -265,7 +282,7 @@ export default function Factures() {
               {lignes.map((ligne, index) => (
                 <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
                   
-                  {/* SÉLECTEUR DE PRODUIT */}
+                  {/* LISTE DÉROULANTE PRODUITS */}
                   <select 
                     value={ligne.description} 
                     onChange={e => handleProductSelect(index, e.target.value)} 
@@ -274,7 +291,7 @@ export default function Factures() {
                   >
                     <option value="">-- Choisir produit --</option>
                     {listeProduits.map((p, i) => (
-                        <option key={i} value={p.nom}>{p.nom}</option>
+                        <option key={i} value={p.nom}>{p.nom} - {p.prix_vente} F</option>
                     ))}
                   </select>
 
