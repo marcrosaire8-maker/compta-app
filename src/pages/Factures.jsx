@@ -1,4 +1,3 @@
-// src/pages/Factures.jsx
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
@@ -6,388 +5,307 @@ import Sidebar from '../components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-/* --- ICÔNES SVG --- */
-const IconPlus = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>;
-const IconPDF = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>;
-const IconTrash = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>;
-const IconClose = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
-
-/* --- STYLES CSS --- */
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  :root {
-    --primary: #4f46e5;
-    --success: #10b981;
-    --danger: #ef4444;
-    --bg-page: #f8fafc;
-    --text-dark: #0f172a;
-    --text-gray: #64748b;
-    --border: #e2e8f0;
-  }
-
-  * { box-sizing: border-box; }
-  body { font-family: 'Inter', sans-serif; margin: 0; background: var(--bg-page); color: var(--text-dark); }
-
-  .layout { display: flex; min-height: 100vh; width: 100%; }
-  
-  .main-area {
-    margin-left: 260px;
-    padding: 2rem;
-    width: 100%;
-    transition: all 0.3s ease;
-    background: var(--bg-page);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  /* --- CORRECTIF MOBILE CRITIQUE --- */
-  /* Ajout de padding-top pour éviter que le bouton burger ne cache le titre */
-  @media (max-width: 900px) {
-    .main-area {
-      margin-left: 0 !important;
-      padding: 1.5rem !important;
-      padding-top: 80px !important; /* C'est ici que ça se joue */
-      width: 100% !important;
-    }
-  }
-
-  .dashboard-container {
-    width: 100%;
-    max-width: 1000px;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  /* HEADER */
-  .header-flex {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    align-items: center;
-    text-align: center;
-    margin-bottom: 1rem;
-  }
-  .header-content h1 {
-    font-size: 1.6rem;
-    font-weight: 800;
-    margin: 0 0 0.5rem 0;
-    color: var(--text-dark);
-    line-height: 1.2;
-  }
-  .header-content p { color: var(--text-gray); font-size: 0.9rem; margin: 0; }
-
-  .btn-create {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 0.95rem;
-    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
-    transition: transform 0.1s;
-  }
-  .btn-create:active { transform: scale(0.98); }
-
-  /* TABLEAU RESPONSIVE */
-  .table-card {
-    background: white;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    width: 100%;
-    overflow: hidden;
-  }
-  
-  table { width: 100%; border-collapse: collapse; }
-  
-  th {
-    background: #f1f5f9; padding: 1rem; text-align: left;
-    font-size: 0.75rem; font-weight: 700; color: var(--text-gray); text-transform: uppercase;
-  }
-  
-  td {
-    padding: 1rem; border-bottom: 1px solid var(--border);
-    font-size: 0.9rem; color: var(--text-dark);
-  }
-
-  .btn-icon {
-    background: #f1f5f9; border: none; padding: 6px; border-radius: 6px; cursor: pointer; color: var(--text-gray); display: inline-flex;
-  }
-  .btn-icon:hover { background: #e2e8f0; color: var(--primary); }
-
-  /* MOBILE CARD TRANSFORMATION */
-  @media (max-width: 768px) {
-    thead { display: none; }
-    tr { display: block; border-bottom: 1px solid var(--border); padding: 1rem; }
-    tr:last-child { border-bottom: none; }
-    td { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border: none; text-align: right; }
-    td::before { content: attr(data-label); font-weight: 600; color: var(--text-gray); font-size: 0.85rem; text-transform: uppercase; margin-right: 1rem; }
-    
-    .header-flex { align-items: flex-start; text-align: left; }
-    .btn-create { width: 100%; justify-content: center; }
-  }
-
-  @media (min-width: 768px) {
-    .header-flex { flex-direction: row; justify-content: space-between; }
-  }
-
-  /* MODAL */
-  .modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
-    display: flex; justify-content: center; align-items: center;
-    z-index: 9999; padding: 1rem;
-  }
-  
-  .modal-content {
-    background: white; width: 100%; max-width: 800px;
-    border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-    display: flex; flex-direction: column; max-height: 90vh;
-  }
-
-  .modal-header {
-    padding: 1.25rem; border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .modal-title { margin: 0; font-size: 1.2rem; font-weight: 700; }
-  
-  .modal-body { padding: 1.5rem; overflow-y: auto; }
-
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
-  .input-group { margin-bottom: 1rem; }
-  .label { display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-gray); }
-  .input {
-    width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; outline: none;
-  }
-  .input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-
-  /* LIGNES FACTURE */
-  .lines-container { background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
-  .line-item {
-    display: grid; grid-template-columns: 1fr; gap: 0.75rem;
-    padding-bottom: 1rem; border-bottom: 1px dashed var(--border); margin-bottom: 1rem;
-  }
-  
-  @media (min-width: 600px) {
-    .line-item { grid-template-columns: 3fr 1fr 1fr 1fr auto; align-items: center; }
-    .form-grid { grid-template-columns: 1fr 1fr; }
-  }
-
-  .btn-submit {
-    width: 100%; padding: 1rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; margin-top: 1rem; font-size: 1rem;
-  }
-`;
-
 export default function Factures() {
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
   const [factures, setFactures] = useState([]);
+  
+  // Listes pour les sélections
+  const [listeClients, setListeClients] = useState([]);
+  const [listeProduits, setListeProduits] = useState([]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // Formulaire
   const [clientNom, setClientNom] = useState('');
   const [dateEmission, setDateEmission] = useState(new Date().toISOString().split('T')[0]);
   const [lignes, setLignes] = useState([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
 
-  useEffect(() => { initData(); }, []);
+  useEffect(() => {
+    initData();
+  }, []);
 
   async function initData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
     const ste = await getEntrepriseForUser(user.id, user.email);
     if (ste) {
       setEntreprise(ste);
       fetchFactures(ste.id);
+      fetchListes(ste.id); // On charge les clients et produits
     }
     setLoading(false);
   }
 
+  // --- CHARGEMENT DES DONNÉES ---
   async function fetchFactures(entrepriseId) {
     const { data } = await supabase
-      .from('factures').select('*')
+      .from('factures')
+      .select('*')
       .eq('entreprise_id', entrepriseId)
       .order('date_emission', { ascending: false });
     setFactures(data || []);
   }
 
-  const updateLigne = (i, field, val) => {
-    const newL = [...lignes];
-    newL[i][field] = val;
-    setLignes(newL);
+  async function fetchListes(entrepriseId) {
+    // 1. Récupérer les CLIENTS
+    const { data: clients } = await supabase
+        .from('tiers')
+        .select('nom_complet')
+        .eq('entreprise_id', entrepriseId)
+        .eq('type_tier', 'CLIENT') // On ne veut que les clients
+        .order('nom_complet');
+    setListeClients(clients || []);
+
+    // 2. Récupérer les PRODUITS
+    const { data: prods } = await supabase
+        .from('produits')
+        .select('*')
+        .eq('entreprise_id', entrepriseId)
+        .order('nom');
+    setListeProduits(prods || []);
+  }
+
+  // --- GESTION DES LIGNES ---
+  const addLigne = () => {
+    setLignes([...lignes, { description: '', quantite: 1, unite: 'unité', prix: 0 }]);
   };
 
-  const totalHT = lignes.reduce((acc, l) => acc + (l.quantite * l.prix), 0);
+  // Quand on choisit un produit dans la liste
+  const handleProductSelect = (index, produitNom) => {
+    const produitTrouve = listeProduits.find(p => p.nom === produitNom);
+    
+    const newLignes = [...lignes];
+    newLignes[index].description = produitNom;
 
+    if (produitTrouve) {
+        // Remplissage automatique !
+        newLignes[index].prix = produitTrouve.prix_vente;
+        newLignes[index].unite = produitTrouve.unite;
+    }
+    setLignes(newLignes);
+  };
+
+  const updateLigne = (index, field, value) => {
+    const newLignes = [...lignes];
+    newLignes[index][field] = value;
+    setLignes(newLignes);
+  };
+
+  const removeLigne = (index) => {
+    setLignes(lignes.filter((_, i) => i !== index));
+  };
+
+  const calculateTotal = () => {
+    return lignes.reduce((acc, ligne) => acc + (ligne.quantite * ligne.prix), 0);
+  };
+
+  // --- SAUVEGARDE ---
   async function handleSave(e) {
     e.preventDefault();
-    if (!entreprise) return;
+    if (!clientNom) return alert("Veuillez sélectionner un client.");
+
     try {
-      const tva = totalHT * 0.18;
-      const ttc = totalHT + tva;
-      const { data: fact, error } = await supabase.from('factures').insert([{
-        entreprise_id: entreprise.id, 
-        numero: `FAC-${Date.now().toString().slice(-6)}`,
-        client_nom: clientNom, 
-        date_emission: dateEmission,
-        total_ht: totalHT, total_tva: tva, total_ttc: ttc, statut: 'VALIDEE'
-      }]).select().single();
+      const totalHT = calculateTotal();
+      const totalTVA = totalHT * 0.18;
+      const totalTTC = totalHT + totalTVA;
 
-      if (error) throw error;
+      const { data: facture, error: errFact } = await supabase
+        .from('factures')
+        .insert([{
+          entreprise_id: entreprise.id,
+          numero: `FAC-${Date.now().toString().slice(-6)}`,
+          client_nom: clientNom,
+          date_emission: dateEmission,
+          total_ht: totalHT,
+          total_tva: totalTVA,
+          total_ttc: totalTTC
+        }])
+        .select()
+        .single();
 
-      await supabase.from('lignes_facture').insert(lignes.map(l => ({
-        facture_id: fact.id, description: l.description, quantite: l.quantite, unite: l.unite, prix_unitaire: l.prix
-      })));
+      if (errFact) throw errFact;
 
-      alert("✅ Facture créée !");
+      const lignesToInsert = lignes.map(l => ({
+        facture_id: facture.id,
+        description: l.description,
+        quantite: l.quantite,
+        unite: l.unite,
+        prix_unitaire: l.prix
+      }));
+
+      const { error: errLignes } = await supabase.from('lignes_facture').insert(lignesToInsert);
+      if (errLignes) throw errLignes;
+
+      alert("Facture enregistrée !");
       setIsModalOpen(false);
       setClientNom('');
       setLignes([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
       fetchFactures(entreprise.id);
-    } catch (err) { alert(err.message); }
+
+    } catch (error) {
+      alert("Erreur : " + error.message);
+    }
   }
 
-  const generatePDF = (f) => {
+  // --- PDF ---
+  const generatePDF = (facture) => {
     const doc = new jsPDF();
-    doc.text(`FACTURE: ${f.numero}`, 14, 20);
-    doc.setFontSize(10); doc.text(`Client: ${f.client_nom}`, 14, 28);
-    autoTable(doc, { startY: 35, head: [['Desc', 'Montant']], body: [['Services', f.total_ttc]] });
-    doc.save(`facture_${f.numero}.pdf`);
+    doc.setFontSize(20); doc.text(entreprise?.nom || 'Mon Entreprise', 14, 22);
+    doc.setFontSize(10); doc.text(`Email: ${entreprise?.email_contact || ''}`, 14, 28);
+    
+    doc.setFontSize(16); doc.text("FACTURE", 150, 22);
+    doc.setFontSize(10); doc.text(`N° ${facture.numero}`, 150, 28);
+    doc.text(`Date : ${facture.date_emission}`, 150, 34);
+
+    doc.setFontSize(12); doc.text(`Client : ${facture.client_nom}`, 14, 45);
+
+    autoTable(doc, {
+      startY: 55,
+      head: [['Description', 'Total HT']],
+      body: [['Détails enregistrés', `${facture.total_ht.toLocaleString()} FCFA`]],
+    });
+
+    let finalY = doc.lastAutoTable.finalY + 10;
+    doc.text(`Total HT : ${facture.total_ht.toLocaleString()} FCFA`, 140, finalY);
+    doc.text(`TVA (18%) : ${facture.total_tva.toLocaleString()} FCFA`, 140, finalY + 6);
+    doc.setFontSize(12); doc.setFont("helvetica", "bold");
+    doc.text(`Total TTC : ${facture.total_ttc.toLocaleString()} FCFA`, 140, finalY + 14);
+    
+    doc.save(`Facture_${facture.numero}.pdf`);
   };
 
-  if (loading) return <div style={{height:'100vh', display:'grid', placeItems:'center'}}>Chargement...</div>;
+  if (loading) return <div style={{padding: 50, textAlign:'center'}}>Chargement...</div>;
 
   return (
-    <div className="layout">
-      <style>{styles}</style>
-      
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
       <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
 
-      <main className="main-area">
-        <div className="dashboard-container">
-          
-          {/* HEADER */}
-          <div className="header-flex">
-            <div className="header-content">
-              <h1>Facturation</h1>
-              <p>Gérez vos factures clients</p>
-            </div>
-            <button onClick={() => setIsModalOpen(true)} className="btn-create">
-              <div style={{width:20, height:20}}><IconPlus /></div> Nouvelle Facture
-            </button>
+      <div style={{ marginLeft: '260px', padding: '30px', width: '100%' }}>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div>
+            <h1 style={{ margin: 0, color: '#1e293b' }}>Ventes & Facturation</h1>
+            <p style={{ color: '#64748b' }}>Créez vos factures en sélectionnant vos produits et clients.</p>
           </div>
-
-          {/* TABLEAU RESPONSIVE */}
-          <div className="table-card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Numéro</th>
-                  <th>Date</th>
-                  <th>Client</th>
-                  <th style={{textAlign:'right'}}>Total TTC</th>
-                  <th style={{textAlign:'center'}}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {factures.map(fac => (
-                  <tr key={fac.id}>
-                    <td data-label="Numéro" style={{fontWeight:'bold', color:'var(--primary)'}}>
-                      {fac.numero}
-                    </td>
-                    <td data-label="Date">
-                      {new Date(fac.date_emission).toLocaleDateString()}
-                    </td>
-                    <td data-label="Client" style={{fontWeight:'500'}}>
-                      {fac.client_nom}
-                    </td>
-                    <td data-label="Montant TTC" style={{textAlign:'right', fontWeight:'700', color:'var(--success)'}}>
-                      {fac.total_ttc.toLocaleString()} F
-                    </td>
-                    <td data-label="Action" style={{textAlign:'center'}}>
-                      <button onClick={() => generatePDF(fac)} className="btn-icon" title="Télécharger PDF">
-                        <div style={{width:18, height:18}}><IconPDF /></div>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {factures.length === 0 && (
-                  <tr>
-                    <td colSpan="5" style={{textAlign:'center', padding:'3rem', color:'var(--text-gray)'}}>
-                      Aucune facture enregistrée.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
+          <button onClick={() => setIsModalOpen(true)} style={btnStyle('#3b82f6')}>
+            + Nouvelle Facture
+          </button>
         </div>
-      </main>
+
+        {/* LISTE */}
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ background: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>
+              <tr>
+                <th style={thStyle}>Numéro</th>
+                <th style={thStyle}>Date</th>
+                <th style={thStyle}>Client</th>
+                <th style={{...thStyle, textAlign: 'right'}}>Total TTC</th>
+                <th style={{...thStyle, textAlign: 'right'}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {factures.map(fac => (
+                <tr key={fac.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{...tdStyle, fontWeight: 'bold'}}>{fac.numero}</td>
+                  <td style={tdStyle}>{fac.date_emission}</td>
+                  <td style={tdStyle}>{fac.client_nom}</td>
+                  <td style={{...tdStyle, textAlign: 'right', fontWeight: 'bold', color: '#10b981'}}>
+                    {fac.total_ttc.toLocaleString()} F
+                  </td>
+                  <td style={{...tdStyle, textAlign: 'right'}}>
+                    <button onClick={() => generatePDF(fac)} style={{ cursor: 'pointer', border: 'none', background: '#cbd5e1', padding: '5px 10px', borderRadius: '4px' }}>🖨️ PDF</button>
+                  </td>
+                </tr>
+              ))}
+               {factures.length === 0 && <tr><td colSpan="5" style={{padding: 30, textAlign: 'center', color: '#94a3b8'}}>Aucune facture.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
 
       {/* MODAL */}
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h2 className="modal-title">Créer une facture</h2>
-              <button onClick={() => setIsModalOpen(false)} style={{background:'none', border:'none', cursor:'pointer', color:'var(--text-gray)'}}>
-                <div style={{width:24, height:24}}><IconClose /></div>
-              </button>
-            </div>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
+          <div style={{ background: 'white', padding: '30px', borderRadius: '10px', width: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginTop: 0 }}>Créer une facture</h2>
             
-            <div className="modal-body">
-              <form onSubmit={handleSave}>
-                <div className="form-grid">
-                  <div className="input-group">
-                    <label className="label">Client</label>
-                    <input className="input" required value={clientNom} onChange={e=>setClientNom(e.target.value)} placeholder="Nom du client" />
-                  </div>
-                  <div className="input-group">
-                    <label className="label">Date</label>
-                    <input type="date" className="input" required value={dateEmission} onChange={e=>setDateEmission(e.target.value)} />
-                  </div>
+            <form onSubmit={handleSave}>
+              {/* EN-TÊTE */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                <div>
+                  <label style={labelStyle}>Client</label>
+                  <select 
+                    value={clientNom} 
+                    onChange={e => setClientNom(e.target.value)} 
+                    style={inputStyle} 
+                    required
+                  >
+                    <option value="">-- Sélectionner un client --</option>
+                    {listeClients.map((c, i) => (
+                        <option key={i} value={c.nom_complet}>{c.nom_complet}</option>
+                    ))}
+                  </select>
+                  {listeClients.length === 0 && <small style={{color:'red'}}>Aucun client trouvé. Ajoutez-en dans "Clients / Fourniss."</small>}
                 </div>
-
-                <div className="lines-container">
-                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:10}}>
-                    <span className="label">Lignes de facture</span>
-                    <button type="button" onClick={()=>setLignes([...lignes, {description:'', quantite:1, unite:'', prix:0}])} style={{color:'var(--primary)', background:'none', border:'none', fontWeight:'bold', cursor:'pointer', fontSize:'0.85rem'}}>
-                      + Ajouter ligne
-                    </button>
-                  </div>
-
-                  {lignes.map((l, i) => (
-                    <div key={i} className="line-item">
-                      <input className="input" placeholder="Description" value={l.description} onChange={e=>updateLigne(i,'description',e.target.value)} />
-                      <input type="number" className="input" placeholder="Qté" value={l.quantite} onChange={e=>updateLigne(i,'quantite',Number(e.target.value))} />
-                      <input className="input" placeholder="Unité" value={l.unite} onChange={e=>updateLigne(i,'unite',e.target.value)} />
-                      <input type="number" className="input" placeholder="Prix" value={l.prix} onChange={e=>updateLigne(i,'prix',Number(e.target.value))} />
-                      {lignes.length > 1 && (
-                        <button type="button" onClick={()=>setLignes(lignes.filter((_,idx)=>idx!==i))} style={{color:'var(--danger)', background:'none', border:'none', cursor:'pointer'}}>
-                          <div style={{width:20, height:20}}><IconTrash /></div>
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div>
+                  <label style={labelStyle}>Date</label>
+                  <input type="date" required value={dateEmission} onChange={e => setDateEmission(e.target.value)} style={inputStyle} />
                 </div>
+              </div>
 
-                <div style={{textAlign:'right', fontSize:'1.2rem', fontWeight:'bold', marginTop:'1.5rem', color:'var(--text-dark)'}}>
-                  Total TTC : <span style={{color:'var(--primary)'}}>{(totalHT * 1.18).toLocaleString()} FCFA</span>
+              {/* LIGNES */}
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '5px', fontWeight: 'bold', color: '#64748b', fontSize: '0.9rem' }}>
+                <span>Produit / Service</span><span>Qté</span><span>Unité</span><span>Prix Unit.</span><span></span>
+              </div>
+
+              {lignes.map((ligne, index) => (
+                <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                  
+                  {/* SÉLECTEUR DE PRODUIT */}
+                  <select 
+                    value={ligne.description} 
+                    onChange={e => handleProductSelect(index, e.target.value)} 
+                    style={inputStyle}
+                    required
+                  >
+                    <option value="">-- Choisir produit --</option>
+                    {listeProduits.map((p, i) => (
+                        <option key={i} value={p.nom}>{p.nom}</option>
+                    ))}
+                  </select>
+
+                  <input type="number" placeholder="0" required min="1" value={ligne.quantite} onChange={e => updateLigne(index, 'quantite', Number(e.target.value))} style={inputStyle} />
+                  <input type="text" value={ligne.unite} onChange={e => updateLigne(index, 'unite', e.target.value)} style={{...inputStyle, background:'#f1f5f9'}} readOnly />
+                  <input type="number" value={ligne.prix} onChange={e => updateLigne(index, 'prix', Number(e.target.value))} style={{...inputStyle, background:'#f1f5f9'}} readOnly />
+                  
+                  {lignes.length > 1 && <button type="button" onClick={() => removeLigne(index)} style={{ padding: '8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>X</button>}
                 </div>
+              ))}
+              
+              <button type="button" onClick={addLigne} style={{ marginBottom: '20px', background: '#f1f5f9', border: '1px dashed #cbd5e1', padding: '8px', width: '100%', cursor: 'pointer' }}>+ Ajouter une ligne</button>
 
-                <button type="submit" className="btn-submit">
-                  Enregistrer la Facture
-                </button>
-              </form>
-            </div>
+              <div style={{ textAlign: 'right', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '20px' }}>
+                Total HT : {calculateTotal().toLocaleString()} FCFA
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '10px 20px', border: '1px solid #ddd', background: 'white', borderRadius: '5px', cursor: 'pointer' }}>Annuler</button>
+                <button type="submit" style={{ padding: '10px 20px', border: 'none', background: '#3b82f6', color: 'white', borderRadius: '5px', cursor: 'pointer' }}>Enregistrer</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }
+
+const btnStyle = (bg) => ({ padding: '10px 20px', background: bg, color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' })
+const thStyle = { padding: '12px 15px', textAlign: 'left', color: '#64748b', fontWeight: '600', background: '#f8fafc' }
+const tdStyle = { padding: '12px 15px', color: '#334155' }
+const labelStyle = { display: 'block', marginBottom: 5, fontSize: '0.9rem', color: '#64748b' }
+const inputStyle = { width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }
