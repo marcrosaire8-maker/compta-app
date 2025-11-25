@@ -27,8 +27,10 @@ const styles = `
   .actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem;margin-bottom:2.5rem}
   .btn{background:#dc2626;color:white;border:none;padding:.9rem 1.8rem;border-radius:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.6rem;box-shadow:0 8px 20px rgba(220,38,38,.3);transition:.3s}
   .btn:hover{background:#b91c1c;transform:translateY(-2px)}
-  .btn-blue{background:#3b82f6}
-  .btn-green{background:#10b981}
+  .btn-blue{background:#3b82f6;box-shadow:0 8px 20px rgba(59,130,246,.3)}
+  .btn-blue:hover{background:#2563eb}
+  .btn-green{background:#10b981;box-shadow:0 8px 20px rgba(16,185,129,.3)}
+  .btn-green:hover{background:#059669}
   .card{background:white;border-radius:18px;border:1px solid #e2e8f0;box-shadow:0 10px 30px -8px rgba(0,0,0,.08);overflow:hidden}
   .search-bar{background:#fef2f2;padding:1rem 1.5rem;border-radius:16px;display:flex;gap:1rem;align-items:center;margin-bottom:2rem}
   .search-input{flex:1;padding:.9rem 1.2rem;border:1px solid #fca5a5;border-radius:12px;outline:none;font-size:1rem;background:white}
