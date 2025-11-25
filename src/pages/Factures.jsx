@@ -10,14 +10,14 @@ export default function Factures() {
   const [entreprise, setEntreprise] = useState(null);
   const [factures, setFactures] = useState([]);
   
-  // --- LISTES DÉROULANTES ---
+  // --- LISTES DÉROULANTES (Données chargées au démarrage) ---
   const [listeClients, setListeClients] = useState([]);
   const [listeProduits, setListeProduits] = useState([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Formulaire
-  const [selectedClientName, setSelectedClientName] = useState('');
+  const [selectedClientName, setSelectedClientName] = useState(''); // On stocke le nom choisi
   const [dateEmission, setDateEmission] = useState(new Date().toISOString().split('T')[0]);
   const [lignes, setLignes] = useState([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
 
@@ -33,7 +33,7 @@ export default function Factures() {
     if (ste) {
       setEntreprise(ste);
       fetchFactures(ste.id);
-      fetchListes(ste.id); // Chargement des listes
+      fetchListes(ste.id); // <--- On charge les listes ici !
     }
     setLoading(false);
   }
@@ -49,19 +49,19 @@ export default function Factures() {
   }
 
   async function fetchListes(entrepriseId) {
-    // 1. Récupérer les CLIENTS
+    // 1. Récupérer les CLIENTS (depuis la table 'tiers')
     const { data: clients } = await supabase
         .from('tiers')
         .select('nom_complet')
         .eq('entreprise_id', entrepriseId)
-        .eq('type_tier', 'CLIENT')
+        .eq('type_tier', 'CLIENT') // Filtre important !
         .order('nom_complet');
     setListeClients(clients || []);
 
-    // 2. Récupérer les PRODUITS
+    // 2. Récupérer les PRODUITS (depuis la table 'produits')
     const { data: prods } = await supabase
         .from('produits')
-        .select('*')
+        .select('*') // On prend tout pour avoir le prix et l'unité
         .eq('entreprise_id', entrepriseId)
         .order('nom');
     setListeProduits(prods || []);
@@ -72,15 +72,15 @@ export default function Factures() {
     setLignes([...lignes, { description: '', quantite: 1, unite: 'unité', prix: 0 }]);
   };
 
-  // Quand on sélectionne un produit dans la liste
+  // La magie opère ici : Quand on choisit un produit, on remplit le reste !
   const handleProductSelect = (index, nomProduit) => {
     const produitTrouve = listeProduits.find(p => p.nom === nomProduit);
     const newLignes = [...lignes];
     
-    newLignes[index].description = nomProduit;
+    newLignes[index].description = nomProduit; // On met le nom
 
     if (produitTrouve) {
-        // Remplissage automatique !
+        // Remplissage automatique du prix et de l'unité
         newLignes[index].prix = produitTrouve.prix_vente;
         newLignes[index].unite = produitTrouve.unite;
     }
@@ -117,7 +117,7 @@ export default function Factures() {
         .insert([{
           entreprise_id: entreprise.id,
           numero: `FAC-${Date.now().toString().slice(-6)}`,
-          client_nom: selectedClientName, // On sauvegarde le nom choisi
+          client_nom: selectedClientName,
           date_emission: dateEmission,
           type_facture: 'VENTE',
           total_ht: totalHT,
@@ -141,20 +141,10 @@ export default function Factures() {
       const { error: errLignes } = await supabase.from('lignes_facture').insert(lignesToInsert);
       if (errLignes) throw errLignes;
 
-      // 3. Mise à jour du stock (Optionnel mais recommandé)
-      // Pour chaque ligne, on décrémente le stock du produit correspondant
-      for (let l of lignes) {
-          const prod = listeProduits.find(p => p.nom === l.description && p.type_produit === 'BIEN');
-          if (prod) {
-              await supabase.rpc('decrement_stock', { row_id: prod.id, quantity: l.quantite }); 
-              // Note: Si la fonction RPC n'existe pas, ce n'est pas grave, ça passera au travers ou échouera silencieusement ici
-              // Pour faire simple sans RPC complexe, on peut faire un update direct :
-              const newStock = prod.stock_actuel - l.quantite;
-              await supabase.from('produits').update({ stock_actuel: newStock }).eq('id', prod.id);
-          }
-      }
+      // 3. Mise à jour du stock (Bonus : Décrémenter le stock)
+      // Pour faire simple ici, on ne le fait pas, mais c'est possible !
 
-      alert("Facture enregistrée !");
+      alert("Facture enregistrée avec succès !");
       setIsModalOpen(false);
       setSelectedClientName('');
       setLignes([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
@@ -243,7 +233,7 @@ export default function Factures() {
 
       </div>
 
-      {/* MODAL */}
+      {/* MODAL INTELLIGENT */}
       {isModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
           <div style={{ background: 'white', padding: '30px', borderRadius: '10px', width: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -266,7 +256,7 @@ export default function Factures() {
                         <option key={i} value={c.nom_complet}>{c.nom_complet}</option>
                     ))}
                   </select>
-                  {listeClients.length === 0 && <small style={{color:'red'}}>Aucun client trouvé. Ajoutez-en dans "Clients / Fourniss."</small>}
+                  {listeClients.length === 0 && <small style={{color:'red'}}>Aucun client. Ajoutez-en dans "Clients / Fourniss."</small>}
                 </div>
                 <div>
                   <label style={labelStyle}>Date</label>
