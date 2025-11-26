@@ -1,127 +1,29 @@
-// src/pages/Dashboard.jsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, Legend, Cell, PieChart, Pie 
+} from 'recharts';
 
-// === ICÔNES SVG PRO ===
-const IconMoney = () => (
-  <svg viewBox="0 0 64 64" fill="currentColor"><path d="M32 6C17.663 6 6 17.663 6 32s11.663 26 26 26 26-11.663 26-26S46.337 6 32 6zm0 48c-12.15 0-22-9.85-22-22s9.85-22 22-22 22 9.85 22 22-9.85 22-22 22z"/><circle cx="32" cy="32" r="12"/><path d="M32 20v24M20 32h24"/></svg>
-);
-const IconExpense = () => (
-  <svg viewBox="0 0 64 64" fill="currentColor"><path d="M58 10H6a2 2 0 0 0-2 2v40a2 2 0 0 0 2 2h52a2 2 0 0 0 2-2V12a2 2 0 0 0-2-2zM8 14h48v36H8z"/><rect x="16" y="22" width="32" height="8"/><rect x="16" y="36" width="24" height="6"/></svg>
-);
-const IconBank = () => (
-  <svg viewBox="0 0 64 64" fill="currentColor"><path d="M54 14H10a2 2 0 0 0-2 2v32a2 2 0 0 0 2 2h44a2 2 0 0 0 2-2V16a2 2 0 0 0-2-2zM10 16h44v8H10zm0 12h8v16h-8zm12 16h24V28H22z"/><path d="M32 36v12"/></svg>
-);
-
-// === STYLES PREMIUM (cohérent avec ton backoffice + effet wow) ===
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-  :root {
-    --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --muted: #64748b;
-    --primary: #4f46e5; --success: #10b981; --danger: #ef4444; --accent: #7c3aed;
-    --border: #e2e8f0; --radius: 18px; --shadow: 0 10px 30px -8px rgba(0,0,0,0.1);
-  }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); }
-
-  .dashboard-wrapper { min-height:100vh; position:relative; overflow:hidden; background:var(--bg); }
-  .parallax-bg {
-    position:fixed; inset:0; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    opacity:0.08; z-index:-2;
-  }
-  .parallax-layer {
-    position:fixed; inset:0;
-    background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><circle cx="60" cy="60" r="40" fill="none" stroke="%23667eea" stroke-width="1" opacity="0.06"/></svg>') repeat;
-    background-size:100px; z-index:-1;
-  }
-
-  .main-content {
-    margin-left:260px; padding:2.5rem; min-height:100vh;
-    transition:margin-left .4s ease;
-  }
-  @media (max-width:1024px) {
-    .main-content { margin-left:0; padding:1.5rem; padding-top:90px; }
-  }
-
-  .header h1 {
-    font-size:clamp(2.2rem,6vw,3.2rem); font-weight:900; margin:0;
-    background:linear-gradient(90deg,#1e293b,#4f46e5,#7c3aed);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  }
-  .header p { color:var(--muted); font-size:1.1rem; margin:0.5rem 0 0; }
-
-  .stats-grid {
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-    gap:2rem; margin:3rem 0;
-  }
-  .stat-card {
-    background:var(--card); border-radius:var(--radius); padding:2rem;
-    border:1px solid var(--border); box-shadow:var(--shadow);
-    position:relative; overflow:hidden; transition:all .4s ease;
-  }
-  .stat-card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:5px;
-    background:linear-gradient(90deg,var(--primary),var(--success));
-    transform:translateX(-100%); transition:transform .6s ease;
-  }
-  .stat-card:hover { transform:translateY(-12px); box-shadow:0 25px 50px -12px rgba(79,70,229,.25); }
-  .stat-card:hover::before { transform:translateX(0); }
-
-  .stat-title { font-size:.95rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:.75rem; }
-  .stat-value { font-size:2.6rem; font-weight:900; margin:0; }
-  .stat-icon { font-size:4rem; opacity:0.15; position:absolute; right:1rem; bottom:1rem; }
-
-  .health-card {
-    background:var(--card); border-radius:var(--radius); padding:2rem;
-    border:1px solid var(--border); box-shadow:var(--shadow);
-  }
-  .progress-container { margin-top:1rem; }
-  .progress-bar {
-    height:16px; border-radius:8px; background:linear-gradient(90deg,var(--success),#34d399);
-    position:relative; overflow:hidden; transition:width 1.8s ease;
-  }
-  .progress-bar::after {
-    content:''; position:absolute; inset:0;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
-    animation:shimmer 2.5s infinite;
-  }
-  @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
-
-  .modal-overlay {
-    position:fixed; inset:0; background:rgba(15,23,42,.85); backdrop-filter:blur(12px);
-    display:flex; align-items:center; justify-content:center; z-index:9999; padding:1rem;
-  }
-  .modal-content {
-    background:white; border-radius:24px; padding:3rem; max-width:600px; width:100%;
-    box-shadow:0 30px 80px -20px rgba(0,0,0,.4);
-  }
-  .create-card {
-    background:var(--card); border-radius:var(--radius); padding:3rem;
-    border:1px solid var(--border); box-shadow:var(--shadow); text-align:center;
-  }
-`;
-
-// === COMPOSANT PRINCIPAL ===
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
+  
+  // --- DONNÉES ---
+  const [stats, setStats] = useState({ ca: 0, depenses: 0, tresorerie: 0, marge: 0 });
+  const [graphData, setGraphData] = useState([]); // Données pour les courbes
+  const [repartitionData, setRepartitionData] = useState([]); // Données pour le camembert
+  
+  // --- MODALES ---
   const [showGuide, setShowGuide] = useState(false);
-  const [stats, setStats] = useState({ ca: 0, depenses: 0, tresorerie: 0 });
   const [newSteName, setNewSteName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const { scrollY } = useScroll();
-  const y1 = useTransform(scrollY, [0, 1000], [0, -250]);
-  const y2 = useTransform(scrollY, [0, 1000], [0, -120]);
-
-  useEffect(() => {
-    checkUser();
-  }, []);
+  useEffect(() => { checkUser(); }, []);
 
   async function checkUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -130,167 +32,244 @@ export default function Dashboard() {
     const ste = await getEntrepriseForUser(user.id, user.email);
     if (ste) {
       setEntreprise(ste);
-      await calculerStats(ste.id);
+      await loadAllData(ste.id);
     }
     setLoading(false);
   }
 
-  async function calculerStats(id) {
-    let ca = 0, dep = 0, treso = 0;
+  async function loadAllData(entrepriseId) {
+    // 1. Récupérer TOUTES les factures pour les stats et les graphes
+    const { data: factures } = await supabase
+      .from('factures')
+      .select('type_facture, total_ttc, date_emission')
+      .eq('entreprise_id', entrepriseId)
+      .order('date_emission', { ascending: true });
 
-    // Factures
-    const { data: factures } = await supabase.from('factures').select('type_facture,total_ttc').eq('entreprise_id', id);
-    factures?.forEach(f => {
-      if (f.type_facture === 'VENTE') ca += f.total_ttc;
-      if (f.type_facture === 'ACHAT') dep += f.total_ttc;
-    });
+    // --- CALCUL KPI GLOBAUX ---
+    let caTotal = 0, depensesTotal = 0;
+    if (factures) {
+      factures.forEach(f => {
+        if (f.type_facture === 'VENTE') caTotal += f.total_ttc;
+        if (f.type_facture === 'ACHAT') depensesTotal += f.total_ttc;
+      });
+    }
 
-    // Trésorerie (comptes 5xxxx)
+    // --- CALCUL TRÉSORERIE ---
     const { data: lignes } = await supabase
       .from('lignes_ecriture')
-      .select('debit,credit,plan_comptable!inner(code_compte)')
-      .eq('plan_comptable.entreprise_id', id);
+      .select('debit, credit, compte:plan_comptable!inner(code_compte)')
+      .eq('plan_comptable.entreprise_id', entrepriseId);
 
+    let treso = 0;
     lignes?.forEach(l => {
-      if (l.plan_comptable?.code_compte?.toString().startsWith('5')) {
-        treso += (l.debit - l.credit);
+      if (l.compte.code_compte.toString().startsWith('5')) treso += (l.debit - l.credit);
+    });
+
+    // --- PRÉPARATION DONNÉES GRAPHIQUE (ÉVOLUTION MENSUELLE) ---
+    const moisNoms = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+    const currentYear = new Date().getFullYear();
+    
+    // On initialise les 12 mois à 0
+    const monthlyStats = Array(12).fill(0).map((_, i) => ({ 
+      name: moisNoms[i], Ventes: 0, Depenses: 0 
+    }));
+
+    factures?.forEach(f => {
+      const d = new Date(f.date_emission);
+      if (d.getFullYear() === currentYear) {
+        const moisIndex = d.getMonth();
+        if (f.type_facture === 'VENTE') monthlyStats[moisIndex].Ventes += f.total_ttc;
+        if (f.type_facture === 'ACHAT') monthlyStats[moisIndex].Depenses += f.total_ttc;
       }
     });
 
-    setStats({ ca, depenses: dep, tresorerie: treso });
+    // --- DONNÉES CAMEMBERT (Répartition simple) ---
+    const pieData = [
+      { name: 'Bénéfice Brut', value: Math.max(0, caTotal - depensesTotal), color: '#10b981' },
+      { name: 'Dépenses', value: depensesTotal, color: '#ef4444' },
+    ];
+
+    setStats({
+      ca: caTotal,
+      depenses: depensesTotal,
+      tresorerie: treso,
+      marge: caTotal > 0 ? ((caTotal - depensesTotal) / caTotal) * 100 : 0
+    });
+    setGraphData(monthlyStats);
+    setRepartitionData(pieData);
   }
 
-  async function createEntreprise(e) {
+  // --- ACTIONS ---
+  async function handleCreateEntreprise(e) {
     e.preventDefault();
     setCreating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('entreprises').insert([
-        { nom: newSteName.trim(), owner_id: user.id, email_contact: user.email }
-      ]);
-      alert('Entreprise créée avec succès !');
+      if (!user) throw new Error("Session expirée.");
+      const { error } = await supabase.from('entreprises').insert([{ nom: newSteName, owner_id: user.id, email_contact: user.email }]);
+      if (error) throw error;
       window.location.reload();
-    } catch (err) {
-      alert('Erreur : ' + err.message);
-    } finally {
-      setCreating(false);
-    }
+    } catch (error) { alert("Erreur : " + error.message); } 
+    finally { setCreating(false); }
   }
 
-  if (loading) {
-    return <div style={{height:'100vh',display:'grid',placeItems:'center',background:'linear-gradient(135deg,#667eea,#764ba2)',color:'white',fontSize:'2rem'}}>Chargement…</div>;
-  }
+  if (loading) return <div style={{ padding: 50, textAlign: 'center' }}>Chargement de vos données...</div>;
 
   return (
-    <div className="dashboard-wrapper">
-      <style>{styles}</style>
-      <motion.div className="parallax-bg" style={{ y: y1 }} />
-      <motion.div className="parallax-layer" style={{ y: y2 }} />
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Inter', sans-serif" }}>
+      
+      <Sidebar entrepriseNom={entreprise?.nom || '...'} userRole={entreprise?.role} />
 
-      <Sidebar entrepriseNom={entreprise?.nom || 'Mon espace'} userRole={entreprise?.role} />
-
-      <main className="main-content">
+      <main style={{ marginLeft: '260px', padding: '40px', width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
+        
         {entreprise ? (
-          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'1.5rem',marginBottom:'3rem'}}>
+          <>
+            {/* EN-TÊTE */}
+            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h1>Tableau de Bord</h1>
-                <p>Bienvenue chez <strong style={{color:'#4f46e5'}}>{entreprise.nom}</strong></p>
+                <h1 style={{ margin: 0, color: '#0f172a', fontSize: '1.8rem', fontWeight: '800' }}>Tableau de Bord</h1>
+                <p style={{ color: '#64748b', margin: '5px 0 0 0' }}>Vos performances en temps réel</p>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                onClick={() => setShowGuide(true)}
-                style={{padding:'1rem 2rem',background:'linear-gradient(90deg,#4f46e5,#7c3aed)',color:'white',border:'none',borderRadius:'14px',fontWeight:700,cursor:'pointer'}}
-              >
-                Guide de Démarrage
-              </motion.button>
+              <button onClick={() => setShowGuide(true)} style={styles.guideBtn}>
+                <span>🚀</span> Guide de Démarrage
+              </button>
+            </header>
+
+            {/* --- 1. WIDGETS KPI (Cartes du haut) --- */}
+            <div style={styles.gridKpi}>
+                <KpiCard title="Chiffre d'Affaires" value={stats.ca} icon="💰" color="#3b82f6" sub="Total Facturé TTC" />
+                <KpiCard title="Dépenses" value={stats.depenses} icon="💸" color="#ef4444" sub="Achats & Frais" />
+                <KpiCard title="Trésorerie" value={stats.tresorerie} icon="🏦" color="#10b981" sub="Disponible (Banque+Caisse)" />
+                <KpiCard title="Marge Nette" value={`${stats.marge.toFixed(1)}%`} icon="📈" color="#8b5cf6" sub="Ratio de rentabilité" isPercent />
             </div>
 
-            <div className="stats-grid">
-              <motion.div whileHover={{ y: -10 }} className="stat-card">
-                <div className="stat-title">Chiffre d'Affaires</div>
-                <div className="stat-value" style={{color:'#10b981'}}>{stats.ca.toLocaleString()} F</div>
-                <div className="stat-icon"><IconMoney /></div>
-              </motion.div>
-              <motion.div whileHover={{ y: -10 }} className="stat-card">
-                <div className="stat-title">Dépenses</div>
-                <div className="stat-value" style={{color:'#ef4444'}}>{stats.depenses.toLocaleString()} F</div>
-                <div className="stat-icon"><IconExpense /></div>
-              </motion.div>
-              <motion.div whileHover={{ y: -10 }} className="stat-card">
-                <div className="stat-title">Trésorerie</div>
-                <div className="stat-value" style={{color:'#4f46e5'}}>{stats.tresorerie.toLocaleString()} F</div>
-                <div className="stat-icon"><IconBank /></div>
-              </motion.div>
+            {/* --- 2. GRAPHIQUES (Le cœur visuel) --- */}
+            <div style={styles.gridCharts}>
+                
+                {/* GRAPHIQUE PRINCIPAL : COURBES D'ÉVOLUTION */}
+                <div style={styles.chartCardLarge}>
+                    <h3 style={styles.chartTitle}>Évolution Financière (Année en cours)</h3>
+                    <div style={{ height: 300, width: '100%' }}>
+                        <ResponsiveContainer>
+                            <AreaChart data={graphData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorVentes" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorDep" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
+                                <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+                                <Tooltip contentStyle={{borderRadius: 8, border: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}} />
+                                <Legend />
+                                <Area type="monotone" dataKey="Ventes" stroke="#3b82f6" fillOpacity={1} fill="url(#colorVentes)" strokeWidth={3} />
+                                <Area type="monotone" dataKey="Depenses" stroke="#ef4444" fillOpacity={1} fill="url(#colorDep)" strokeWidth={3} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* GRAPHIQUE SECONDAIRE : RÉPARTITION (CAMEMBERT) */}
+                <div style={styles.chartCardSmall}>
+                    <h3 style={styles.chartTitle}>Répartition Résultat</h3>
+                    <div style={{ height: 300, width: '100%', display:'flex', justifyContent:'center' }}>
+                        <ResponsiveContainer>
+                            <PieChart>
+                                <Pie
+                                    data={repartitionData}
+                                    cx="50%" cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {repartitionData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                                <Legend verticalAlign="bottom" height={36}/>
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div style={{textAlign:'center', marginTop:-20, color:'#64748b', fontSize:'0.9rem'}}>
+                        Vue simplifiée (Produits vs Charges)
+                    </div>
+                </div>
+
             </div>
 
-            <motion.div className="health-card" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
-              <h3 style={{margin:'0 0 1.5rem',fontSize:'1.4rem'}}>Santé financière</h3>
-              <div style={{display:'flex',alignItems:'center',gap:'2rem'}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:'.95rem',color:'var(--muted)',marginBottom:'.75rem'}}>Marge nette estimée</div>
-                  <div style={{height:16,background:'#f1f5f9',borderRadius:8,overflow:'hidden'}}>
-                    <div className="progress-bar" style={{width: `${stats.ca > 0 ? Math.max(0, Math.min(100, ((stats.ca - stats.depenses) / stats.ca) * 100)) : 0}%`}} />
-                  </div>
-                </div>
-                <div style={{fontSize:'2.4rem',fontWeight:900,color:'#10b981'}}>
-                  {stats.ca > 0 ? (((stats.ca - stats.depenses) / stats.ca) * 100).toFixed(1) : 0}%
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+          </>
         ) : (
-          <motion.div className="create-card" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 120 }}>
-            <h2 style={{fontSize:'2.6rem',background:'linear-gradient(90deg,#4f46e5,#7c3aed)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',margin:'0 0 1rem'}}>
-              Créez votre entreprise
-            </h2>
-            <p style={{color:'var(--muted)',fontSize:'1.2rem',margin:'1.5rem 0 2.5rem'}}>Commencez en 10 secondes</p>
-            <form onSubmit={createEntreprise}>
-              <input
-                type="text" required placeholder="Nom de votre entreprise (ex: Ma Boutique SARL)"
-                value={newSteName} onChange={e => setNewSteName(e.target.value)}
-                style={{width:'100%',padding:'1.2rem 1.6rem',fontSize:'1.1rem',borderRadius:'14px',border:'1px solid var(--border)',marginBottom:'1.5rem'}}
-              />
-              <motion.button
-                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}
-                type="submit" disabled={creating}
-                style={{width:'100%',padding:'1.2rem',background:'linear-gradient(90deg,#4f46e5,#7c3aed)',color:'white',border:'none',borderRadius:'14px',fontWeight:800,fontSize:'1.2rem',cursor:'pointer'}}
-              >
-                {creating ? 'Création...' : 'Activer mon espace comptable'}
-              </motion.button>
+          <div style={styles.repairContainer}>
+            <h2 style={{ color: '#e11d48' }}>Initialisation Requise</h2>
+            <p style={{ color: '#64748b', marginBottom: 20 }}>Configurez votre entreprise pour accéder aux graphiques.</p>
+            <form onSubmit={handleCreateEntreprise} style={{ display: 'flex', gap: 10, flexDirection: 'column' }}>
+              <input type="text" placeholder="Nom de votre entreprise" value={newSteName} onChange={e => setNewSteName(e.target.value)} required style={styles.input} />
+              <button type="submit" disabled={creating} style={styles.createBtn}>{creating ? '...' : 'Activer'}</button>
             </form>
-          </motion.div>
+          </div>
         )}
       </main>
 
-      {/* Guide Modal */}
+      {/* MODAL GUIDE */}
       {showGuide && (
-        <div className="modal-overlay" onClick={() => setShowGuide(false)}>
-          <motion.div className="modal-content" onClick={e => e.stopPropagation()} initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-            <h2 style={{fontSize:'2.4rem',textAlign:'center',marginBottom:'2rem'}}>Bienvenue !</h2>
-            {[
-              "Configurer votre plan comptable OHADA",
-              "Ajouter vos premiers clients & fournisseurs",
-              "Émettre votre première facture",
-              "Suivre votre trésorerie en temps réel"
-            ].map((t, i) => (
-              <div key={i} style={{display:'flex',gap:'1.5rem',alignItems:'center',marginBottom:'1.8rem'}}>
-                <div style={{background:'#e0e7ff',color:'#4f46e5',width:56,height:56,borderRadius:16,display:'grid',placeItems:'center',fontWeight:900,fontSize:'1.4rem'}}>
-                  {i + 1}
+        <div style={styles.modalOverlay}>
+            <div style={styles.modal}>
+                <h2 style={{ marginTop: 0, color: '#1e293b', borderBottom: '2px solid #f1f5f9', paddingBottom: 15 }}>🚀 Guide de Démarrage</h2>
+                <div style={{ margin: '20px 0' }}>
+                    <Step n="1" t="Plan Comptable" d="Allez dans 'Plan Comptable' > 'Importer le modèle OHADA'." />
+                    <Step n="2" t="Tiers" d="Créez vos Clients et Fournisseurs." />
+                    <Step n="3" t="Opérations" d="Utilisez 'Factures' pour vendre et 'Dépenses' pour acheter." />
                 </div>
-                <div style={{fontSize:'1.25rem',fontWeight:600}}>{t}</div>
-              </div>
-            ))}
-            <div style={{textAlign:'right',marginTop:'3rem'}}>
-              <motion.button whileHover={{ scale: 1.05 }} onClick={() => setShowGuide(false)}
-                style={{padding:'1rem 2.5rem',background:'linear-gradient(90deg,#4f46e5,#7c3aed)',color:'white',border:'none',borderRadius:'14px',fontWeight:700,fontSize:'1.1rem',cursor:'pointer'}}
-              >
-                C’est parti !
-              </motion.button>
+                <button onClick={() => setShowGuide(false)} style={styles.closeBtn}>Compris !</button>
             </div>
-          </motion.div>
         </div>
       )}
     </div>
-  );
+  )
 }
+
+// --- COMPOSANTS DESIGN ---
+function KpiCard({ title, value, icon, color, sub, isPercent }) {
+    return (
+        <div style={{ background: 'white', padding: '25px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', borderBottom: `4px solid ${color}`, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', right:-10, top:-10, fontSize:'5rem', opacity:0.05, color: 'black' }}>{icon}</div>
+            <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600', textTransform:'uppercase' }}>{title}</p>
+            <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#1e293b' }}>
+                {typeof value === 'number' && !isPercent ? value.toLocaleString() : value} {isPercent ? '' : 'F'}
+            </p>
+            <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: color, fontWeight: '500' }}>{sub}</p>
+        </div>
+    )
+}
+
+function Step({ n, t, d }) {
+    return (
+        <div style={{ display: 'flex', gap: 15, marginBottom: 15 }}>
+            <div style={{ background: '#eff6ff', color: '#3b82f6', width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', flexShrink: 0 }}>{n}</div>
+            <div><div style={{ fontWeight: 'bold', color: '#1e293b' }}>{t}</div><div style={{ fontSize: '0.9rem', color: '#64748b' }}>{d}</div></div>
+        </div>
+    )
+}
+
+// --- STYLES CSS-IN-JS ---
+const styles = {
+    guideBtn: { padding: '10px 20px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(139, 92, 246, 0.3)', display:'flex', gap:10 },
+    gridKpi: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '25px', marginBottom: '40px' },
+    gridCharts: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' },
+    chartCardLarge: { background: 'white', padding: '25px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' },
+    chartCardSmall: { background: 'white', padding: '25px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' },
+    chartTitle: { marginTop: 0, marginBottom: 20, color: '#334155', fontSize: '1.1rem' },
+    repairContainer: { maxWidth: '500px', margin: '100px auto', background: 'white', padding: '40px', borderRadius: '16px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' },
+    input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: 10, boxSizing: 'border-box' },
+    createBtn: { padding: '12px', width: '100%', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
+    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+    modal: { background: 'white', padding: '40px', borderRadius: '16px', width: '600px', maxWidth: '90%' },
+    closeBtn: { padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginTop: 20, width:'100%' }
+};
