@@ -1,50 +1,45 @@
+// src/pages/Paie.jsx
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-/* ICÔNES */
-const IconPlus = () => <span>＋</span>;
-const IconPrint = () => <span>🖨️</span>;
-const IconCheck = () => <span>✅</span>;
+const formatMoney = (value) => value?.toLocaleString('fr-FR') + ' F' || '0 F';
 
 export default function Paie() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
   const [bulletins, setBulletins] = useState([]);
   const [employes, setEmployes] = useState([]);
-
-  // MODAL & FORMULAIRE
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [form, setForm] = useState({
     employe_id: '',
-    mois: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+    mois: new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
     salaire_base: 0,
     primes: 0,
     cotisations: 0,
     impots: 0
   });
 
-  useEffect(() => {
-    initData();
-  }, []);
+  useEffect(() => { initData(); }, []);
 
   async function initData() {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) return navigate('/login');
 
     const ste = await getEntrepriseForUser(user.id, user.email);
     if (ste) {
       setEntreprise(ste);
-      fetchBulletins(ste.id);
-      fetchEmployes(ste.id);
+      await Promise.all([fetchBulletins(ste.id), fetchEmployes(ste.id)]);
     }
     setLoading(false);
   }
 
-  // 1. Récupérer les bulletins existants
   async function fetchBulletins(id) {
     const { data } = await supabase
       .from('fiches_paie')
@@ -54,239 +49,259 @@ export default function Paie() {
     setBulletins(data || []);
   }
 
-  // 2. Récupérer la liste des employés (depuis Tiers)
   async function fetchEmployes(id) {
     const { data } = await supabase
       .from('tiers')
       .select('id, nom_complet')
       .eq('entreprise_id', id)
-      .eq('type_tier', 'EMPLOYE'); // Filtre important !
+      .eq('type_tier', 'EMPLOYE');
     setEmployes(data || []);
   }
 
-  // CALCUL DYNAMIQUE
   const brut = Number(form.salaire_base) + Number(form.primes);
   const net = brut - Number(form.cotisations) - Number(form.impots);
 
-  // --- SAUVEGARDE ---
   async function handleSave(e) {
     e.preventDefault();
-    if (!form.employe_id) return alert("Veuillez sélectionner un employé.");
+    if (!form.employe_id) return alert("Veuillez sélectionner un employé");
 
     try {
-      // On trouve le nom de l'employé pour le stocker
-      const employeChoisi = employes.find(e => e.id === form.employe_id);
-
+      const employe = employes.find(e => e.id === form.employe_id);
       const payload = {
         entreprise_id: entreprise.id,
         employe_id: form.employe_id,
-        employe_nom: employeChoisi ? employeChoisi.nom_complet : 'Inconnu',
+        employe_nom: employe?.nom_complet || 'Inconnu',
         mois: form.mois,
         salaire_base: Number(form.salaire_base),
         primes: Number(form.primes),
+        salaire_brut: brut,
         cotisations_sociales: Number(form.cotisations),
         impots_revenu: Number(form.impots),
-        salaire_net: net
+        salaire_net: net,
+        est_comptabilise: false
       };
 
-      const { error } = await supabase.from('fiches_paie').insert([payload]);
-      if (error) throw error;
-
-      alert("Bulletin créé avec succès !");
+      await supabase.from('fiches_paie').insert([payload]);
+      alert("Bulletin de paie créé !");
       setIsModalOpen(false);
+      setForm({
+        employe_id: '',
+        mois: new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+        salaire_base: 0,
+        primes: 0,
+        cotisations: 0,
+        impots: 0
+      });
       fetchBulletins(entreprise.id);
-
-    } catch (error) {
-      alert("Erreur : " + error.message);
+    } catch (err) {
+      alert("Erreur : " + err.message);
     }
   }
 
-  // --- PDF ---
   const generatePDF = (b) => {
-    const doc = new jsPDF();
-    doc.setFontSize(18); doc.text("BULLETIN DE PAIE", 105, 20, null, null, "center");
-    
-    doc.setFontSize(10);
-    doc.text(`Employeur : ${entreprise.nom}`, 14, 35);
-    doc.text(`Employé : ${b.employe_nom}`, 140, 35);
-    doc.text(`Période : ${b.mois}`, 14, 45);
+    const doc = bastante(new jsPDF());
+
+    doc.setFontSize(20);
+    doc.text("BULLETIN DE PAIE", 105, 25, { align: "center" });
+
+    doc.setFontSize(11);
+    doc.text(`Employeur : ${entreprise?.nom || 'Entreprise'}`, 14, 40);
+    doc.text(`Employé : ${b.employe_nom}`, 14, 48);
+    doc.text(`Période : ${b.mois}`, 14, 56);
 
     autoTable(doc, {
-        startY: 55,
-        head: [['Rubrique', 'Gains (+)', 'Retenues (-)']],
-        body: [
-            ['Salaire de Base', b.salaire_base.toLocaleString(), ''],
-            ['Primes & Indemnités', b.primes.toLocaleString(), ''],
-            ['Salaire BRUT', b.salaire_brut.toLocaleString(), ''],
-            ['Cotisations Sociales', '', b.cotisations_sociales.toLocaleString()],
-            ['Impôts (IRPP)', '', b.impots_revenu.toLocaleString()],
-        ],
-        theme: 'grid'
+      startY: 70,
+      head: [['Rubrique', 'Montant']],
+      body: [
+        ['Salaire de base', formatMoney(b.salaire_base)],
+        ['Primes & indemnités', formatMoney(b.primes)],
+        ['Salaire BRUT', { content: formatMoney(b.salaire_brut), styles: { fontStyle: 'bold' } }],
+        ['Cotisations sociales', formatMoney(b.cotisations_sociales)],
+        ['Impôts sur le revenu', formatMoney(b.impots_revenu)],
+        ['NET À PAYER', { content: formatMoney(b.salaire_net), styles: { fillColor: [220, 252, 231], fontStyle: 'bold', textColor: [22, 101, 52] } }]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229], textColor: 255 },
+      styles: { cellPadding: 6, fontSize: 11 }
     });
 
-    doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text(`NET À PAYER : ${b.salaire_net.toLocaleString()} FCFA`, 140, doc.lastAutoTable.finalY + 15);
-    doc.save(`Paie_${b.employe_nom}.pdf`);
+    doc.save(`Bulletin_${b.employe_nom.replace(/ /g, '_')}_${b.mois}.pdf`);
   };
 
-  // --- COMPTABILISATION (Bonus) ---
   const comptabiliser = async (b) => {
-      if(!confirm("Générer l'écriture comptable pour ce bulletin ?")) return;
-      try {
-          // Création de l'écriture OD
-          const { data: ecriture, error: errH } = await supabase.from('ecritures_comptables').insert([{
-              entreprise_id: entreprise.id,
-              date_ecriture: b.date_paie,
-              libelle: `Paie ${b.mois} - ${b.employe_nom}`,
-              journal_code: 'OD'
-          }]).select().single();
-          
-          if(errH) throw errH;
+    if (!confirm("Comptabiliser ce bulletin dans le journal ?")) return;
+    try {
+      const { data: ecriture } = await supabase
+        .from('ecritures_comptables')
+        .insert([{
+          entreprise_id: entreprise.id,
+          date_ecriture: new Date().toISOString().split('T')[0],
+          libelle: `Paie ${b.mois} - ${b.employe_nom}`,
+          journal_code: 'OD'
+        }])
+        .select()
+        .single();
 
-          // Lignes (661 Charge / 422 Dette employé)
-          await supabase.from('lignes_ecriture').insert([
-              { ecriture_id: ecriture.id, debit: b.salaire_brut, credit: 0, compte_id: null }, // Idéalement, trouver l'ID du compte 661
-              { ecriture_id: ecriture.id, debit: 0, credit: b.salaire_net, compte_id: null }  // Idéalement, trouver l'ID du compte 422
-          ]);
+      // À améliorer avec vrais comptes (ex: 641, 421, 445)
+      await supabase.from('lignes_ecriture').insert([
+        { ecriture_id: ecriture.id, debit: b.salaire_brut, credit: 0, compte_id: null },
+        { ecriture_id: ecriture.id, debit: 0, credit: b.salaire_net, compte_id: null }
+      ]);
 
-          // Mettre à jour le statut
-          await supabase.from('fiches_paie').update({ est_comptabilise: true }).eq('id', b.id);
-          fetchBulletins(entreprise.id);
-          alert("Écriture générée dans le Journal !");
-
-      } catch (e) { alert("Erreur: " + e.message); }
+      await supabase.from('fiches_paie').update({ est_comptabilise: true }).eq('id', b.id);
+      fetchBulletins(entreprise.id);
+      alert("Écriture comptable générée !");
+    } catch (err) {
+      alert("Erreur comptabilisation : " + err.message);
+    }
   };
 
-  if (loading) return <div>Chargement...</div>;
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748b' }}>Chargement de la paie...</div>;
 
   return (
-    <>
-      <style>{styles}</style>
-      <div className="page">
-        <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
-        
-        <div className="main">
-          <div className="actions">
-            <div className="header">
-              <h1>Gestion de la Paie</h1>
-              <p>Éditez vos bulletins de salaire simplement</p>
-            </div>
-            <button onClick={() => setIsModalOpen(true)} className="btn btn-blue"><IconPlus/> Nouveau Bulletin</button>
-          </div>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Inter', sans-serif" }}>
+      <Sidebar entrepriseNom={entreprise?.nom || '...'} userRole={entreprise?.role} />
 
-          <div className="card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mois</th>
-                  <th>Employé</th>
-                  <th className="text-right">Salaire Brut</th>
-                  <th className="text-right">Net à Payer</th>
-                  <th className="text-center">État</th>
-                  <th className="text-right">Actions</th>
+      <main style={{ marginLeft: 260, padding: 40, width: '100%', maxWidth: 1400, margin: '0 auto' }}>
+        <header style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ margin: 0, color: '#0f172a', fontSize: '1.8rem', fontWeight: 800 }}>Gestion de la Paie</h1>
+            <p style={{ color: '#64748b', margin: '5px 0 0' }}>Bulletins de salaire et comptabilisation automatique</p>
+          </div>
+          <button onClick={() => setIsModalOpen(true)} style={styles.guideBtn}>
+            Nouveau Bulletin
+          </button>
+        </header>
+
+        <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ background: '#eef2ff' }}>
+              <tr>
+                <th style={thStyle}>Période</th>
+                <th style={thStyle}>Employé</th>
+                <th style={{...thStyle, textAlign: 'right'}}>Brut</th>
+                <th style={{...thStyle, textAlign: 'right'}}>Net à payer</th>
+                <th style={{...thStyle, textAlign: 'center'}}>Statut</th>
+                <th style={{...thStyle, textAlign: 'center'}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bulletins.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: 80, textAlign: 'center', color: '#94a3b8', fontSize: '1.1rem' }}>
+                  Aucun bulletin de paie généré
+                </td></tr>
+              ) : bulletins.map(b => (
+                <tr key={b.id} style={{ borderTop: '1px solid #c7d2fe' }}>
+                  <td style={{...tdStyle, fontWeight: 600 }}>{b.mois}</td>
+                  <td style={{...tdStyle, fontWeight: 700, color: '#4338ca' }}>{b.employe_nom}</td>
+                  <td style={{...tdStyle, textAlign: 'right' }}>{formatMoney(b.salaire_brut)}</td>
+                  <td style={{...tdStyle, textAlign: 'right', color: '#16a34a', fontWeight: 800 }}>
+                    {formatMoney(b.salaire_net)}
+                  </td>
+                  <td style={{...tdStyle, textAlign: 'center' }}>
+                    {b.est_comptabilise ? (
+                      <span style={{ padding: '6px 12px', background: '#ecfdf5', color: '#059669', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem' }}>
+                        Comptabilisé
+                      </span>
+                    ) : (
+                      <span style={{ padding: '6px 12px', background: '#fff7ed', color: '#ea580c', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem' }}>
+                        En attente
+                      </span>
+                    )}
+                  </td>
+                  <td style={{...tdStyle, textAlign: 'center' }}>
+                    <button onClick={() => generatePDF(b)} style={{ marginRight: 16, background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>PDF</button>
+                    {!b.est_comptabilise && (
+                      <button onClick={() => comptabiliser(b)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4f46e5', fontWeight: 700 }}>
+                        Comptabiliser
+                      </button>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {bulletins.map(b => (
-                  <tr key={b.id}>
-                    <td>{b.mois}</td>
-                    <td style={{fontWeight:'bold'}}>{b.employe_nom}</td>
-                    <td className="text-right">{b.salaire_brut?.toLocaleString()} F</td>
-                    <td className="text-right" style={{color:'#10b981', fontWeight:'bold'}}>{b.salaire_net?.toLocaleString()} F</td>
-                    <td className="text-center">
-                        {b.est_comptabilise ? <span className="badge-ok">Comptabilisé</span> : <span className="badge-wait">En attente</span>}
-                    </td>
-                    <td className="text-right">
-                      <button onClick={() => generatePDF(b)} style={{background:'none', border:'none', cursor:'pointer', marginRight:10}}><IconPrint/></button>
-                      {!b.est_comptabilise && <button onClick={() => comptabiliser(b)} style={{background:'none', border:'none', cursor:'pointer', color:'#3b82f6', fontWeight:'bold'}}>Comptabiliser</button>}
-                    </td>
-                  </tr>
-                ))}
-                {bulletins.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:30, color:'#94a3b8'}}>Aucun bulletin généré.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </main>
 
-      {/* MODAL */}
+      {/* MODAL IDENTIQUE AUX AUTRES PAGES */}
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Nouveau Bulletin de Paie</h2>
+        <div style={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 30px', color: '#4f46e5', fontSize: '1.8rem', fontWeight: 800 }}>Nouveau Bulletin de Paie</h2>
             <form onSubmit={handleSave}>
-                <div className="form-group">
-                    <label>Employé</label>
-                    <select value={form.employe_id} onChange={e => setForm({...form, employe_id: e.target.value})} required>
-                        <option value="">-- Sélectionner un employé --</option>
-                        {employes.map(em => <option key={em.id} value={em.id}>{em.nom_complet}</option>)}
-                    </select>
-                    {employes.length === 0 && <small style={{color:'red'}}>Aucun employé trouvé. Créez-en un dans la page "Tiers" avec le type EMPLOYE.</small>}
-                </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>Employé *</label>
+                <select value={form.employe_id} onChange={e => setForm({...form, employe_id: e.target.value})} required style={inputStyle}>
+                  <option value="">-- Sélectionner un employé --</option>
+                  {employes.map(e => <option key={e.id} value={e.id}>{e.nom_complet}</option>)}
+                </select>
+                {employes.length === 0 && <small style={{color:'#ef4444', marginTop:8, display:'block'}}>Aucun employé. Ajoutez-en dans "Tiers" (type EMPLOYE)</small>}
+              </div>
 
-                <div className="form-group">
-                    <label>Période</label>
-                    <input type="text" value={form.mois} onChange={e => setForm({...form, mois: e.target.value})} />
-                </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>Période</label>
+                <input type="text" value={form.mois} onChange={e => setForm({...form, mois: e.target.value})} style={inputStyle} placeholder="ex: Juin 2025" />
+              </div>
 
-                <div style={{background:'#f8fafc', padding:15, borderRadius:8, marginBottom:15}}>
-                    <div className="form-group">
-                        <label>Salaire de Base</label>
-                        <input type="number" value={form.salaire_base} onChange={e => setForm({...form, salaire_base: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                        <label>Primes & Indemnités</label>
-                        <input type="number" value={form.primes} onChange={e => setForm({...form, primes: e.target.value})} />
-                    </div>
-                    <div style={{textAlign:'right', fontWeight:'bold'}}>Salaire BRUT : {brut.toLocaleString()} FCFA</div>
+              <div style={{ background: '#f8fafc', padding: 20, borderRadius: 16, marginBottom: 24 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 16 }}>
+                  <div>
+                    <label style={labelStyle}>Salaire de base</label>
+                    <input type="number" value={form.salaire_base} onChange={e => setForm({...form, salaire_base: e.target.value})} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Primes & indemnités</label>
+                    <input type="number" value={form.primes} onChange={e => setForm({...form, primes: e.target.value})} style={inputStyle} />
+                  </div>
                 </div>
+                <div style={{ textAlign: 'right', fontSize: '1.3rem', fontWeight: 800, color: '#4f46e5' }}>
+                  Salaire BRUT : {formatMoney(brut)}
+                </div>
+              </div>
 
-                <div className="form-group">
-                    <label>Cotisations sociales (CNSS...)</label>
-                    <input type="number" value={form.cotisations} onChange={e => setForm({...form, cotisations: e.target.value})} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                <div>
+                  <label style={labelStyle}>Cotisations sociales (CNSS, etc.)</label>
+                  <input type="number" value={form.cotisations} onChange={e => setForm({...form, cotisations: e.target.value})} style={inputStyle} />
                 </div>
-                <div className="form-group">
-                    <label>Impôts sur le revenu (IRPP)</label>
-                    <input type="number" value={form.impots} onChange={e => setForm({...form, impots: e.target.value})} />
+                <div>
+                  <label style={labelStyle}>Impôts sur le revenu (IRPP)</label>
+                  <input type="number" value={form.impots} onChange={e => setForm({...form, impots: e.target.value})} style={inputStyle} />
                 </div>
+              </div>
 
-                <div style={{background:'#dcfce7', padding:15, borderRadius:8, textAlign:'center', marginBottom:20}}>
-                    <label style={{color:'#166534'}}>NET À PAYER</label>
-                    <div style={{fontSize:'1.5rem', fontWeight:'bold', color:'#166534'}}>{net.toLocaleString()} FCFA</div>
+              <div style={{ background: '#ecfdf5', padding: 20, borderRadius: 16, textAlign: 'center' }}>
+                <div style={{ fontSize: '1.1rem', color: '#166534', marginBottom: 8 }}>NET À PAYER</div>
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#166534' }}>
+                  {formatMoney(net)}
                 </div>
+              </div>
 
-                <div style={{display:'flex', justifyContent:'flex-end', gap:10}}>
-                    <button type="button" onClick={() => setIsModalOpen(false)} style={{padding:'10px', background:'#ddd', border:'none', borderRadius:5, cursor:'pointer'}}>Annuler</button>
-                    <button type="submit" className="btn btn-red">Créer le bulletin</button>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 30 }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '12px 32px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Annuler
+                </button>
+                <button type="submit" style={{ padding: '12px 40px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, cursor: 'pointer' }}>
+                  Créer le bulletin
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
-// Styles CSS Injectés
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-  body { margin: 0; font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; }
-  .page { display: flex; min-height: 100vh; }
-  .main { flex: 1; margin-left: 260px; padding: 2rem; }
-  .header h1 { font-size: 2rem; font-weight: 800; color: #1e293b; margin: 0; }
-  .actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-  .btn { padding: 0.8rem 1.5rem; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; display: flex; gap: 0.5rem; color: white; }
-  .btn-blue { background: #3b82f6; } .btn-red { background: #ef4444; }
-  .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 1rem; background: #f1f5f9; color: #64748b; font-size: 0.85rem; text-transform: uppercase; }
-  td { padding: 1rem; border-bottom: 1px solid #e2e8f0; }
-  .text-right { text-align: right; } .text-center { text-align: center; }
-  .badge-ok { background: #dcfce7; color: #166534; padding: 4px 8px; borderRadius: 4px; font-weight: bold; font-size: 0.8rem; }
-  .badge-wait { background: #ffedd5; color: #9a3412; padding: 4px 8px; borderRadius: 4px; font-weight: bold; font-size: 0.8rem; }
-  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 50; }
-  .modal { background: white; padding: 2rem; border-radius: 12px; width: 500px; max-width: 90%; max-height: 90vh; overflow-y: auto; }
-  .form-group { margin-bottom: 1rem; }
-  label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #475569; font-size: 0.9rem; }
-  input, select { width: 100%; padding: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
-`;
+// === MÊMES STYLES QUE TOUTES LES AUTRES PAGES ===
+const styles = {
+  guideBtn: { padding: '12px 28px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 8px 25px rgba(79,70,229,0.3)' },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
+  modal: { background: 'white', padding: 40, borderRadius: 20, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 30px 80px rgba(0,0,0,0.25)' },
+};
+
+const thStyle = { padding: '20px', textAlign: 'left', color: '#4338ca', fontWeight: 700, fontSize: '0.9rem', textTransform: 'uppercase' };
+const tdStyle = { padding: '20px', color: '#334155' };
+const labelStyle = { display: 'block', marginBottom: 8, fontWeight: 600, color: '#475569' };
+const inputStyle = { width: '100%', padding: '14px', borderRadius: 12, border: '2px solid #e2e8f0', fontSize: '1rem', boxSizing: 'border-box' };

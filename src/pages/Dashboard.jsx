@@ -3,22 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, Legend, Cell, PieChart, Pie 
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
 } from 'recharts';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
-  
-  // --- DONNÉES ---
   const [stats, setStats] = useState({ ca: 0, depenses: 0, tresorerie: 0, marge: 0 });
-  const [graphData, setGraphData] = useState([]); // Données pour les courbes
-  const [repartitionData, setRepartitionData] = useState([]); // Données pour le camembert
-  
-  // --- MODALES ---
+  const [graphData, setGraphData] = useState([]);
+  const [repartitionData, setRepartitionData] = useState([]);
   const [showGuide, setShowGuide] = useState(false);
   const [newSteName, setNewSteName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -28,7 +24,6 @@ export default function Dashboard() {
   async function checkUser() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate('/login'); return; }
-
     const ste = await getEntrepriseForUser(user.id, user.email);
     if (ste) {
       setEntreprise(ste);
@@ -38,23 +33,20 @@ export default function Dashboard() {
   }
 
   async function loadAllData(entrepriseId) {
-    // 1. Récupérer TOUTES les factures pour les stats et les graphes
+    // Factures → CA + Dépenses
     const { data: factures } = await supabase
       .from('factures')
       .select('type_facture, total_ttc, date_emission')
       .eq('entreprise_id', entrepriseId)
       .order('date_emission', { ascending: true });
 
-    // --- CALCUL KPI GLOBAUX ---
     let caTotal = 0, depensesTotal = 0;
-    if (factures) {
-      factures.forEach(f => {
-        if (f.type_facture === 'VENTE') caTotal += f.total_ttc;
-        if (f.type_facture === 'ACHAT') depensesTotal += f.total_ttc;
-      });
-    }
+    factures?.forEach(f => {
+      if (f.type_facture === 'VENTE') caTotal += f.total_ttc;
+      if (f.type_facture === 'ACHAT') depensesTotal += f.total_ttc;
+    });
 
-    // --- CALCUL TRÉSORERIE ---
+    // Trésorerie depuis le plan comptable (comptes 5xxxx)
     const { data: lignes } = await supabase
       .from('lignes_ecriture')
       .select('debit, credit, compte:plan_comptable!inner(code_compte)')
@@ -62,31 +54,29 @@ export default function Dashboard() {
 
     let treso = 0;
     lignes?.forEach(l => {
-      if (l.compte.code_compte.toString().startsWith('5')) treso += (l.debit - l.credit);
+      if (l.compte.code_compte.toString().startsWith('5')) {
+        treso += (l.debit - l.credit);
+      }
     });
 
-    // --- PRÉPARATION DONNÉES GRAPHIQUE (ÉVOLUTION MENSUELLE) ---
-    const moisNoms = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+    // Graphique mensuel
+    const moisNoms = ["Jan", "Fév","Mar","Avr","Mai","Juin","Juil","Aoû","Sep","Oct","Nov","Déc"];
     const currentYear = new Date().getFullYear();
-    
-    // On initialise les 12 mois à 0
-    const monthlyStats = Array(12).fill(0).map((_, i) => ({ 
-      name: moisNoms[i], Ventes: 0, Depenses: 0 
-    }));
+    const monthlyStats = moisNoms.map(name => ({ name, Ventes: 0, Depenses: 0 }));
 
     factures?.forEach(f => {
       const d = new Date(f.date_emission);
       if (d.getFullYear() === currentYear) {
-        const moisIndex = d.getMonth();
-        if (f.type_facture === 'VENTE') monthlyStats[moisIndex].Ventes += f.total_ttc;
-        if (f.type_facture === 'ACHAT') monthlyStats[moisIndex].Depenses += f.total_ttc;
+        const mois = d.getMonth();
+        if (f.type_facture === 'VENTE') monthlyStats[mois].Ventes += f.total_ttc;
+        if (f.type_facture === 'ACHAT') monthlyStats[mois].Depenses += f.total_ttc;
       }
     });
 
-    // --- DONNÉES CAMEMBERT (Répartition simple) ---
+    // Pie chart
     const pieData = [
-      { name: 'Bénéfice Brut', value: Math.max(0, caTotal - depensesTotal), color: '#10b981' },
-      { name: 'Dépenses', value: depensesTotal, color: '#ef4444' },
+      { name: 'Bénéfice', value: Math.max(0, caTotal - depensesTotal), color: '#10b981' },
+      { name: 'Dépenses', value: depensesTotal, color: '#f87171' },
     ];
 
     setStats({
@@ -99,177 +89,396 @@ export default function Dashboard() {
     setRepartitionData(pieData);
   }
 
-  // --- ACTIONS ---
   async function handleCreateEntreprise(e) {
     e.preventDefault();
     setCreating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Session expirée.");
-      const { error } = await supabase.from('entreprises').insert([{ nom: newSteName, owner_id: user.id, email_contact: user.email }]);
-      if (error) throw error;
+      await supabase.from('entreprises').insert([{
+        nom: newSteName,
+        owner_id: user.id,
+        email_contact: user.email
+      }]);
       window.location.reload();
-    } catch (error) { alert("Erreur : " + error.message); } 
-    finally { setCreating(false); }
+    } catch (error) {
+      alert("Erreur : " + error.message);
+    } finally {
+      setCreating(false);
+    }
   }
 
-  if (loading) return <div style={{ padding: 50, textAlign: 'center' }}>Chargement de vos données...</div>;
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'Satoshi, sans-serif', color: '#475569'
+      }}>
+        <div style={{
+          width: 80, height: 80,
+          border: '6px solid #e2e8f0',
+          borderTopColor: '#f97316',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          marginBottom: 24
+        }}></div>
+        <p style={{ fontSize: 24, fontWeight: 600 }}>Chargement de votre tableau de bord...</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Inter', sans-serif" }}>
-      
-      <Sidebar entrepriseNom={entreprise?.nom || '...'} userRole={entreprise?.role} />
+    <>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Satoshi:wght@400;500;700;900&display=swap');
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Satoshi', sans-serif; background: #f8fafc; color: #1e293b; }
 
-      <main style={{ marginLeft: '260px', padding: '40px', width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
-        
-        {entreprise ? (
-          <>
-            {/* EN-TÊTE */}
-            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h1 style={{ margin: 0, color: '#0f172a', fontSize: '1.8rem', fontWeight: '800' }}>Tableau de Bord</h1>
-                <p style={{ color: '#64748b', margin: '5px 0 0 0' }}>Vos performances en temps réel</p>
+        .dashboard-layout {
+          display: flex;
+          min-height: 100vh;
+          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
+        }
+        main {
+          flex: 1;
+          padding: 40px;
+          margin-left: 260px;
+          background: rgba(255,255,255,0.85);
+          backdrop-filter: blur(12px);
+        }
+
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 50px;
+        }
+        .header h1 {
+          font-size: 44px;
+          font-weight: 900;
+          background: linear-gradient(90deg, #f97316, #fb923c);
+          -webkit-background-clip: text;
+          color: transparent;
+        }
+        .header p {
+          color: #64748b;
+          font-size: 19px;
+          margin-top: 10px;
+        }
+        .guide-btn {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border: none;
+          padding: 16px 36px;
+          border-radius: 20px;
+          font-weight: 800;
+          font-size: 17px;
+          cursor: pointer;
+          box-shadow: 0 10px 30px rgba(139,92,246,0.3);
+          transition: all 0.3s;
+        }
+        .guide-btn:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(139,92,246,0.4); }
+
+        .kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 32px;
+          margin-bottom: 60px;
+        }
+        .kpi-card {
+          background: white;
+          padding: 36px;
+          border-radius: 28px;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+          border: 1px solid #e2e8f0;
+          position: relative;
+          overflow: hidden;
+          transition: transform 0.4s ease;
+        }
+        .kpi-card:hover { transform: translateY(-12px); }
+        .kpi-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 8px;
+          background: var(--color);
+          border-radius: 28px 28px 0 0;
+        }
+        .kpi-icon {
+          position: absolute;
+          top: -20px;
+          right: -20px;
+          font-size: 110px;
+          opacity: 0.06;
+          color: #1e293b;
+        }
+        .kpi-title {
+          font-size: 15px;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 1.5px;
+          font-weight: 600;
+          margin-bottom: 8px;
+        }
+        .kpi-value {
+          font-size: 44px;
+          font-weight: 900;
+          color: #1e293b;
+          margin: 8px 0;
+        }
+        .kpi-sub {
+          font-size: 16px;
+          color: #64748b;
+        }
+
+        .charts-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 40px;
+        }
+        .chart-card {
+          background: white;
+          border-radius: 32px;
+          padding: 40px;
+          box-shadow: 0 25px 60px rgba(0,0,0,0.1);
+          border: 1px solid #e2e8f0;
+        }
+        .chart-title {
+          font-size: 26px;
+          font-weight: 900;
+          color: #1e293b;
+          margin-bottom: 32px;
+        }
+
+        .setup-card {
+          background: white;
+          max-width: 560px;
+          margin: 120px auto;
+          padding: 70px 50px;
+          border-radius: 40px;
+          text-align: center;
+          box-shadow: 0 30px 80px rgba(0,0,0,0.12);
+          border: 1px solid #e2e8f0;
+        }
+        .setup-card h2 {
+          font-size: 42px;
+          background: linear-gradient(90deg, #f97316, #fb923c);
+          -webkit-background-clip: text;
+          color: transparent;
+          margin-bottom: 16px;
+        }
+
+        .modal {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        }
+        .modal-content {
+          background: white;
+          border-radius: 36px;
+          padding: 50px;
+          max-width: 620px;
+          width: 90%;
+          box-shadow: 0 40px 100px rgba(0,0,0,0.2);
+        }
+        .modal h2 {
+          font-size: 34px;
+          margin-bottom: 36px;
+          color: #1e293b;
+          text-align: center;
+        }
+        .step {
+          display: flex;
+          gap: 24px;
+          margin-bottom: 28px;
+          align-items: flex-start;
+        }
+        .step-num {
+          background: linear-gradient(135deg, #f97316, #fb923c);
+          color: white;
+          width: 52px;
+          height: 52px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 22px;
+          flex-shrink: 0;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 1024px) {
+          main { margin-left: 0; padding: 20px; }
+          .charts-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 768px) {
+          .header { flex-direction: column; text-align: center; gap: 24px; }
+          .header h1 { font-size: 38px; }
+        }
+      `}</style>
+
+      <div className="dashboard-layout">
+        <Sidebar entrepriseNom={entreprise?.nom || 'Mon Entreprise'} userRole={entreprise?.role} />
+
+        <main>
+          {entreprise ? (
+            <>
+              {/* Header */}
+              <div className="header">
+                <div>
+                  <h1>Tableau de Bord</h1>
+                  <p>Bienvenue, {entreprise.nom} • Vos finances en un coup d’œil</p>
+                </div>
+                <button onClick={() => setShowGuide(true)} className="guide-btn">
+                  Guide de Démarrage
+                </button>
               </div>
-              <button onClick={() => setShowGuide(true)} style={styles.guideBtn}>
-                <span>🚀</span> Guide de Démarrage
-              </button>
-            </header>
 
-            {/* --- 1. WIDGETS KPI (Cartes du haut) --- */}
-            <div style={styles.gridKpi}>
-                <KpiCard title="Chiffre d'Affaires" value={stats.ca} icon="💰" color="#3b82f6" sub="Total Facturé TTC" />
-                <KpiCard title="Dépenses" value={stats.depenses} icon="💸" color="#ef4444" sub="Achats & Frais" />
-                <KpiCard title="Trésorerie" value={stats.tresorerie} icon="🏦" color="#10b981" sub="Disponible (Banque+Caisse)" />
-                <KpiCard title="Marge Nette" value={`${stats.marge.toFixed(1)}%`} icon="📈" color="#8b5cf6" sub="Ratio de rentabilité" isPercent />
-            </div>
-
-            {/* --- 2. GRAPHIQUES (Le cœur visuel) --- */}
-            <div style={styles.gridCharts}>
-                
-                {/* GRAPHIQUE PRINCIPAL : COURBES D'ÉVOLUTION */}
-                <div style={styles.chartCardLarge}>
-                    <h3 style={styles.chartTitle}>Évolution Financière (Année en cours)</h3>
-                    <div style={{ height: 300, width: '100%' }}>
-                        <ResponsiveContainer>
-                            <AreaChart data={graphData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="colorVentes" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                    </linearGradient>
-                                    <linearGradient id="colorDep" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
-                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
-                                <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 3" />
-                                <Tooltip contentStyle={{borderRadius: 8, border: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}} />
-                                <Legend />
-                                <Area type="monotone" dataKey="Ventes" stroke="#3b82f6" fillOpacity={1} fill="url(#colorVentes)" strokeWidth={3} />
-                                <Area type="monotone" dataKey="Depenses" stroke="#ef4444" fillOpacity={1} fill="url(#colorDep)" strokeWidth={3} />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
+              {/* KPI */}
+              <div className="kpi-grid">
+                <div className="kpi-card" style={{ "--color": "#3b82f6" }}>
+                  <div className="kpi-icon">Money</div>
+                  <div className="kpi-title">Chiffre d'affaires</div>
+                  <div className="kpi-value">{stats.ca.toLocaleString()} F</div>
+                  <div className="kpi-sub">Ventes facturées TTC</div>
                 </div>
 
-                {/* GRAPHIQUE SECONDAIRE : RÉPARTITION (CAMEMBERT) */}
-                <div style={styles.chartCardSmall}>
-                    <h3 style={styles.chartTitle}>Répartition Résultat</h3>
-                    <div style={{ height: 300, width: '100%', display:'flex', justifyContent:'center' }}>
-                        <ResponsiveContainer>
-                            <PieChart>
-                                <Pie
-                                    data={repartitionData}
-                                    cx="50%" cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {repartitionData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                                <Legend verticalAlign="bottom" height={36}/>
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div style={{textAlign:'center', marginTop:-20, color:'#64748b', fontSize:'0.9rem'}}>
-                        Vue simplifiée (Produits vs Charges)
-                    </div>
+                <div className="kpi-card" style={{ "--color": "#ef4444" }}>
+                  <div className="kpi-icon">Expenses</div>
+                  <div className="kpi-title">Dépenses</div>
+                  <div className="kpi-value">{stats.depenses.toLocaleString()} F</div>
+                  <div className="kpi-sub">Achats & charges</div>
                 </div>
 
-            </div>
-
-          </>
-        ) : (
-          <div style={styles.repairContainer}>
-            <h2 style={{ color: '#e11d48' }}>Initialisation Requise</h2>
-            <p style={{ color: '#64748b', marginBottom: 20 }}>Configurez votre entreprise pour accéder aux graphiques.</p>
-            <form onSubmit={handleCreateEntreprise} style={{ display: 'flex', gap: 10, flexDirection: 'column' }}>
-              <input type="text" placeholder="Nom de votre entreprise" value={newSteName} onChange={e => setNewSteName(e.target.value)} required style={styles.input} />
-              <button type="submit" disabled={creating} style={styles.createBtn}>{creating ? '...' : 'Activer'}</button>
-            </form>
-          </div>
-        )}
-      </main>
-
-      {/* MODAL GUIDE */}
-      {showGuide && (
-        <div style={styles.modalOverlay}>
-            <div style={styles.modal}>
-                <h2 style={{ marginTop: 0, color: '#1e293b', borderBottom: '2px solid #f1f5f9', paddingBottom: 15 }}>🚀 Guide de Démarrage</h2>
-                <div style={{ margin: '20px 0' }}>
-                    <Step n="1" t="Plan Comptable" d="Allez dans 'Plan Comptable' > 'Importer le modèle OHADA'." />
-                    <Step n="2" t="Tiers" d="Créez vos Clients et Fournisseurs." />
-                    <Step n="3" t="Opérations" d="Utilisez 'Factures' pour vendre et 'Dépenses' pour acheter." />
+                <div className="kpi-card" style={{ "--color": "#10b981" }}>
+                  <div className="kpi-icon">Bank</div>
+                  <div className="kpi-title">Trésorerie</div>
+                  <div className="kpi-value">{stats.tresorerie.toLocaleString()} F</div>
+                  <div className="kpi-sub">Banque + Caisse réelle</div>
                 </div>
-                <button onClick={() => setShowGuide(false)} style={styles.closeBtn}>Compris !</button>
+
+                <div className="kpi-card" style={{ "--color": "#8b5cf6" }}>
+                  <div className="kpi-icon">Chart</div>
+                  <div className="kpi-title">Marge nette</div>
+                  <div className="kpi-value">{stats.marge.toFixed(1)} %</div>
+                  <div className="kpi-sub">Rentabilité globale</div>
+                </div>
+              </div>
+
+              {/* Graphiques */}
+              <div className="charts-grid">
+                <div className="chart-card">
+                  <h3 className="chart-title">Évolution mensuelle {new Date().getFullYear()}</h3>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <AreaChart data={graphData}>
+                      <defs>
+                        <linearGradient id="ventes" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05}/>
+                        </linearGradient>
+                        <linearGradient id="depenses" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f87171" stopOpacity={0.9}/>
+                          <stop offset="95%" stopColor="#f87171" stopOpacity={0.05}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="4 4" stroke="#e2e8f0" />
+                      <XAxis dataKey="name" stroke="#64748b" />
+                      <YAxis stroke="#64748b" />
+                      <Tooltip formatter={(v) => v.toLocaleString() + ' F'} contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }} />
+                      <Area type="monotone" dataKey="Ventes" stroke="#3b82f6" fill="url(#ventes)" strokeWidth={4} />
+                      <Area type="monotone" dataKey="Depenses" stroke="#f87171" fill="url(#depenses)" strokeWidth={4} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="chart-card">
+                  <h3 className="chart-title">Répartition du résultat</h3>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart>
+                      <Pie
+                        data={repartitionData}
+                        cx="50%" cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        paddingAngle={6}
+                        dataKey="value"
+                      >
+                        {repartitionData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip formatter={(v) => v.toLocaleString() + ' F'} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="setup-card">
+              <h2>Créez votre entreprise</h2>
+              <p style={{ color: '#64748b', fontSize: '19px', margin: '20px 0 40px' }}>
+                Commencez en 10 secondes • Tout est prêt pour vous
+              </p>
+              <form onSubmit={handleCreateEntreprise}>
+                <input
+                  type="text"
+                  placeholder="Nom de votre entreprise"
+                  value={newSteName}
+                  onChange={(e) => setNewSteName(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '20px', borderRadius: '20px', border: '2px solid #e2e8f0', fontSize: '18px', marginBottom: '24px' }}
+                />
+                <button
+                  type="submit"
+                  disabled={creating}
+                  style={{ width: '100%', padding: '20px', background: 'linear-gradient(135deg, #f97316, #fb923c)', color: 'white', border: 'none', borderRadius: '20px', fontWeight: '800', fontSize: '19px', cursor: 'pointer', boxShadow: '0 10px 30px rgba(249,115,22,0.3)' }}
+                >
+                  {creating ? 'Création en cours...' : 'Activer mon espace'}
+                </button>
+              </form>
             </div>
-        </div>
-      )}
-    </div>
-  )
-}
+          )}
 
-// --- COMPOSANTS DESIGN ---
-function KpiCard({ title, value, icon, color, sub, isPercent }) {
-    return (
-        <div style={{ background: 'white', padding: '25px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', borderBottom: `4px solid ${color}`, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', right:-10, top:-10, fontSize:'5rem', opacity:0.05, color: 'black' }}>{icon}</div>
-            <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '600', textTransform:'uppercase' }}>{title}</p>
-            <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#1e293b' }}>
-                {typeof value === 'number' && !isPercent ? value.toLocaleString() : value} {isPercent ? '' : 'F'}
-            </p>
-            <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: color, fontWeight: '500' }}>{sub}</p>
-        </div>
-    )
+          {/* Modal Guide */}
+          {showGuide && (
+            <div className="modal" onClick={() => setShowGuide(false)}>
+              <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <h2>Guide de Démarrage Rapide</h2>
+                <div className="step">
+                  <div className="step-num">1</div>
+                  <div>
+                    <strong>Importez le plan comptable OHADA</strong>
+                    <p style={{ color: '#64748b', marginTop: '6px' }}>Paramètres → Plan Comptable → "Importer SYSCOHADA"</p>
+                  </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">2</div>
+                  <div>
+                    <strong>Ajoutez vos clients & fournisseurs</strong>
+                    <p style={{ color: '#64748b', marginTop: '6px' }}>Menu "Tiers" → Nouveau</p>
+                  </div>
+                </div>
+                <div className="step">
+                  <div className="step-num">3</div>
+                  <div>
+                    <strong>Facturez et enregistrez vos dépenses</strong>
+                    <p style={{ color: '#64748b', marginTop: '6px' }}>Tout se met à jour automatiquement ici</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowGuide(false)} style={{ width: '100%', padding: '20px', background: 'linear-gradient(135deg, #f97316, #fb923c)', color: 'white', border: 'none', borderRadius: '20px', fontWeight: '800', fontSize: '19px', marginTop: '20px' }}>
+                  C’est parti !
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </>
+  );
 }
-
-function Step({ n, t, d }) {
-    return (
-        <div style={{ display: 'flex', gap: 15, marginBottom: 15 }}>
-            <div style={{ background: '#eff6ff', color: '#3b82f6', width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', flexShrink: 0 }}>{n}</div>
-            <div><div style={{ fontWeight: 'bold', color: '#1e293b' }}>{t}</div><div style={{ fontSize: '0.9rem', color: '#64748b' }}>{d}</div></div>
-        </div>
-    )
-}
-
-// --- STYLES CSS-IN-JS ---
-const styles = {
-    guideBtn: { padding: '10px 20px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(139, 92, 246, 0.3)', display:'flex', gap:10 },
-    gridKpi: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '25px', marginBottom: '40px' },
-    gridCharts: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' },
-    chartCardLarge: { background: 'white', padding: '25px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' },
-    chartCardSmall: { background: 'white', padding: '25px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' },
-    chartTitle: { marginTop: 0, marginBottom: 20, color: '#334155', fontSize: '1.1rem' },
-    repairContainer: { maxWidth: '500px', margin: '100px auto', background: 'white', padding: '40px', borderRadius: '16px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' },
-    input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: 10, boxSizing: 'border-box' },
-    createBtn: { padding: '12px', width: '100%', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-    modal: { background: 'white', padding: '40px', borderRadius: '16px', width: '600px', maxWidth: '90%' },
-    closeBtn: { padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginTop: 20, width:'100%' }
-};
