@@ -1,4 +1,3 @@
-// src/pages/Depenses.jsx
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
@@ -6,301 +5,294 @@ import Sidebar from '../components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-/* ICÔNES SVG */
-const IconPlus = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 4.5v15m7.5-7.5h-15" />
-  </svg>
-);
-
-const IconPDF = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5m-7.5 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-  </svg>
-);
-
-const IconTrash = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-  </svg>
-);
-
-const IconClose = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-/* STYLES */
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-  *{box-sizing:border-box}body{margin:0;font-family:'Inter',sans-serif;background:#f8fafc;color:#1e293b}
-  .page{display:flex;min-height:100vh}
-  .main{flex:1;margin-left:260px;padding:2.5rem;transition:all .4s}
-  @media(max-width:1024px){.main{margin-left:0;padding:1.5rem;padding-top:90px}}
-  .header h1{font-size:2.4rem;font-weight:900;background:linear-gradient(90deg,#dc2626,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0 0 .5rem}
-  .header p{color:#64748b;margin:0}
-  .actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem;margin-bottom:2.5rem}
-  .btn{background:#dc2626;color:white;border:none;padding:.9rem 1.8rem;border-radius:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.6rem;box-shadow:0 8px 20px rgba(220,38,38,.3);transition:.3s}
-  .btn:hover{background:#b91c1c;transform:translateY(-2px)}
-  .card{background:white;border-radius:18px;border:1px solid #e2e8f0;box-shadow:0 10px 30px -8px rgba(0,0,0,.08);overflow:hidden}
-  .card-header{padding:1.5rem 2rem;background:#fef2f2;border-bottom:1px solid #fee2e2}
-  .card-header h3{margin:0;color:#991b1b;font-weight:700}
-  table{width:100%;border-collapse:collapse}
-  th{background:#fef2f2;padding:1rem;text-align:left;font-size:.8rem;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:1px}
-  td{padding:1rem;border-bottom:1px solid #fee2e2;color:#334155}
-  .text-right{text-align:right}
-  .text-red{color:#dc2626;font-weight:700}
-  @media(max-width:768px){
-    thead{display:none}
-    tr{display:block;background:white;margin-bottom:1rem;border:1px solid #fee2e2;border-radius:16px;padding:1rem;box-shadow:0 4px 12px rgba(220,38,38,.08)}
-    td{display:flex;justify-content:space-between;padding:.5rem 0;border:none}
-    td::before{content:attr(data-label);font-weight:600;color:#991b1b;text-transform:uppercase;font-size:.8rem}
-  }
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1rem}
-  .modal{background:white;border-radius:24px;width:100%;max-width:720px;max-height:90vh;overflow:hidden;box-shadow:0 30px 80px -20px rgba(220,38,38,.4)}
-  .modal-header{padding:1.5rem 2rem;background:#fef2f2;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #fee2e2}
-  .modal-title{margin:0;font-size:1.6rem;font-weight:800;color:#991b1b}
-  .modal-body{padding:2rem;overflow-y:auto}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
-  .group{display:flex;flex-direction:column}
-  label{margin-bottom:.5rem;font-weight:600;color:#475569;font-size:.95rem}
-  input{padding:.9rem 1.2rem;border:1px solid #cbd5e1;border-radius:12px;font-size:1rem;outline:none;transition:.3s}
-  input:focus{border-color:#dc2626;box-shadow:0 0 0 4px rgba(220,38,38,.1)}
-  .lines{background:#fef2f2;border:2px dashed #fca5a5;border-radius:16px;padding:1.5rem;margin:1.5rem 0}
-  .line{display:grid;grid-template-columns:3fr 1fr 1fr 1fr auto;gap:1rem;align-items:center;margin-bottom:1rem}
-  @media(max-width:640px){.line{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
-  .total{text-align:right;font-size:1.5rem;font-weight:800;color:#991b1b;margin:1.5rem 0}
-  .submit{width:100%;padding:1.1rem;background:#dc2626;color:white;border:none;border-radius:14px;font-weight:800;cursor:pointer}
-`;
-
 export default function Depenses() {
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
   const [depenses, setDepenses] = useState([]);
-  const [fournisseurs, setFournisseurs] = useState([]);
-  const [open, setOpen] = useState(false);
+  
+  // --- LISTE DES FOURNISSEURS (Connectée à la BDD) ---
+  const [listeFournisseurs, setListeFournisseurs] = useState([]);
 
-  const [fournisseur, setFournisseur] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Formulaire
+  const [fournisseurId, setFournisseurId] = useState('');   // ID pour le lien technique
+  const [fournisseurNom, setFournisseurNom] = useState(''); // Nom pour l'affichage
+  const [dateEmission, setDateEmission] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Lignes de dépense
   const [lignes, setLignes] = useState([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
 
   useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const ste = await getEntrepriseForUser(user.id, user.email);
-      if (!ste) return;
-
-      setEntreprise(ste);
-
-      const [factRes, fourRes] = await Promise.all([
-        supabase.from('factures').select('*').eq('entreprise_id', ste.id).eq('type_facture', 'ACHAT').order('date_emission', { ascending: false }),
-        supabase.from('tiers').select('nom_complet').eq('entreprise_id', ste.id).eq('type_tier', 'FOURNISSEUR')
-      ]);
-
-      setDepenses(factRes.data || []);
-      setFournisseurs(fourRes.data || []);
-      setLoading(false);
-    })();
+    initData();
   }, []);
 
-  const totalHT = lignes.reduce((a, l) => a + l.quantite * l.prix, 0);
-  const tva = totalHT * 0.18;
-  const totalTTC = totalHT + tva;
+  async function initData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-  const ajouterLigne = () => setLignes([...lignes, { description: '', quantite: 1, unite: '', prix: 0 }]);
-  const supprimerLigne = i => setLignes(lignes.filter((_, idx) => idx !== i));
-  const majLigne = (i, champ, val) => {
-    const newL = [...lignes];
-    newL[i][champ] = (champ === 'quantite' || champ === 'prix') ? Number(val) || 0 : val;
-    setLignes(newL);
+    const ste = await getEntrepriseForUser(user.id, user.email);
+    if (ste) {
+      setEntreprise(ste);
+      fetchDepenses(ste.id);
+      fetchFournisseurs(ste.id); // <--- On charge les fournisseurs
+    }
+    setLoading(false);
+  }
+
+  // 1. Charger l'historique des dépenses (Factures type ACHAT)
+  async function fetchDepenses(entrepriseId) {
+    const { data } = await supabase
+      .from('factures')
+      .select('*')
+      .eq('entreprise_id', entrepriseId)
+      .eq('type_facture', 'ACHAT') // Filtre essentiel
+      .order('date_emission', { ascending: false });
+    setDepenses(data || []);
+  }
+
+  // 2. Charger la liste des FOURNISSEURS depuis l'annuaire
+  async function fetchFournisseurs(entrepriseId) {
+    const { data } = await supabase
+      .from('tiers')
+      .select('id, nom_complet')
+      .eq('entreprise_id', entrepriseId)
+      .eq('type_tier', 'FOURNISSEUR') // On ne veut que les fournisseurs
+      .order('nom_complet');
+    setListeFournisseurs(data || []);
+  }
+
+  // --- GESTION FORMULAIRE ---
+
+  // Sélection du fournisseur dans la liste
+  const handleFournisseurSelect = (e) => {
+      const id = e.target.value;
+      const fourn = listeFournisseurs.find(f => f.id === id);
+      setFournisseurId(id);
+      setFournisseurNom(fourn ? fourn.nom_complet : '');
   };
 
-  const sauver = async e => {
+  const addLigne = () => setLignes([...lignes, { description: '', quantite: 1, unite: 'unité', prix: 0 }]);
+  
+  const updateLigne = (index, field, value) => {
+    const newLignes = [...lignes];
+    newLignes[index][field] = value;
+    setLignes(newLignes);
+  };
+
+  const removeLigne = (index) => {
+    setLignes(lignes.filter((_, i) => i !== index));
+  };
+
+  const calculateTotal = () => lignes.reduce((acc, l) => acc + (l.quantite * l.prix), 0);
+
+  // --- SAUVEGARDE ---
+  async function handleSave(e) {
     e.preventDefault();
-    if (!fournisseur.trim()) return alert('Fournisseur requis');
+    if (!fournisseurId) return alert("Veuillez sélectionner un fournisseur.");
 
     try {
-      const { data: fac, error: err1 } = await supabase
+      const totalHT = calculateTotal();
+      // Note : Sur les dépenses, la TVA est souvent déjà incluse ou différente, 
+      // ici on garde une logique simple TTC = HT pour la saisie rapide, 
+      // ou on applique 18% si c'est la règle. Disons TTC = HT pour simplifier la saisie de ticket.
+      const totalTTC = totalHT; 
+
+      // Génération numéro ACH-TIMESTAMP
+      const numeroFacture = `ACH-${Date.now().toString().slice(-6)}`;
+
+      // 1. Créer l'en-tête Facture (Type ACHAT)
+      const { data: facture, error: errFact } = await supabase
         .from('factures')
-        .insert({
+        .insert([{
           entreprise_id: entreprise.id,
-          type_facture: 'ACHAT',
-          numero: `ACH-${Date.now().toString().slice(-6)}`,
-          client_nom: fournisseur.trim(),
-          date_emission: date,
+          tier_id: fournisseurId,      // Lien technique
+          client_nom: fournisseurNom,  // Nom affiché (ici c'est le fournisseur)
+          numero: numeroFacture,
+          date_emission: dateEmission,
+          type_facture: 'ACHAT',       // <--- IMPORTANT
+          statut: 'PAYEE',             // Une dépense est souvent payée comptant
           total_ht: totalHT,
-          total_tva: tva,
-          total_ttc: totalTTC,
-          statut: 'VALIDEE'
-        })
+          total_ttc: totalTTC
+        }])
         .select()
         .single();
 
-      if (err1) throw err1;
+      if (errFact) throw errFact;
 
-      const lignesOk = lignes.filter(l => l.description.trim() && l.prix > 0);
-      if (lignesOk.length > 0) {
-        const { error: err2 } = await supabase.from('lignes_facture').insert(
-          lignesOk.map(l => ({
-            facture_id: fac.id,
-            description: l.description,
-            quantite: l.quantite,
-            unite: l.unite,
-            prix_unitaire: l.prix
-          }))
-        );
-        if (err2) throw err2;
-      }
+      // 2. Créer les lignes
+      const lignesToInsert = lignes.map(l => ({
+        facture_id: facture.id,
+        description: l.description,
+        quantite: l.quantite,
+        unite: l.unite,
+        prix_unitaire: l.prix
+      }));
 
-      alert('Dépense enregistrée avec succès !');
-      setOpen(false);
-      setFournisseur('');
+      const { error: errLignes } = await supabase.from('lignes_facture').insert(lignesToInsert);
+      if (errLignes) throw errLignes;
+
+      alert("Dépense enregistrée !");
+      setIsModalOpen(false);
+      
+      // Reset
+      setFournisseurId('');
+      setFournisseurNom('');
       setLignes([{ description: '', quantite: 1, unite: 'unité', prix: 0 }]);
+      fetchDepenses(entreprise.id);
 
-      const { data } = await supabase
-        .from('factures')
-        .select('*')
-        .eq('entreprise_id', entreprise.id)
-        .eq('type_facture', 'ACHAT')
-        .order('date_emission', { ascending: false });
-      setDepenses(data || []);
-    } catch (err) {
-      alert('Erreur : ' + err.message);
+    } catch (error) {
+      alert("Erreur : " + error.message);
     }
-  };
+  }
 
-  const pdf = f => {
+  // --- PDF (Bon de Dépense) ---
+  const generatePDF = (facture) => {
     const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text(`DÉPENSE - ${f.numero}`, 14, 20);
-    doc.setFontSize(11);
-    doc.text(`Fournisseur : ${f.client_nom}`, 14, 30);
-    doc.text(`Date : ${new Date(f.date_emission).toLocaleDateString('fr-FR')}`, 14, 38);
-    doc.text(`Total TTC : ${f.total_ttc.toLocaleString()} FCFA`, 14, 46);
+    doc.setFontSize(18); doc.text(entreprise?.nom || 'Entreprise', 14, 22);
+    doc.setFontSize(12); doc.text("BON DE DÉPENSE", 150, 22);
+    doc.setFontSize(10); doc.text(`N° ${facture.numero}`, 150, 28);
+    doc.text(`Date : ${facture.date_emission}`, 150, 34);
+
+    doc.text(`Fournisseur : ${facture.client_nom}`, 14, 45);
 
     autoTable(doc, {
-      startY: 60,
-      head: [['Description', 'Qté', 'Unité', 'PU HT', 'Total HT']],
-      body: lignes.map(l => [l.description || '-', l.quantite, l.unite, l.prix.toLocaleString(), (l.quantite * l.prix).toLocaleString()])
+        startY: 55,
+        head: [['Description', 'Montant Total']],
+        body: [['Détails de la dépense', `${facture.total_ttc.toLocaleString()} F`]], // Simplifié pour l'historique
     });
-    doc.save(`depense_${f.numero}.pdf`);
+
+    doc.text(`Total Payé : ${facture.total_ttc.toLocaleString()} FCFA`, 140, doc.lastAutoTable.finalY + 10);
+    doc.save(`Depense_${facture.numero}.pdf`);
   };
 
-  if (loading) return <div style={{height:'100vh',display:'grid',placeItems:'center',fontSize:'2rem'}}>Chargement…</div>;
+  if (loading) return <div style={{padding: 50, textAlign:'center'}}>Chargement...</div>;
 
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: styles }} />
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+      <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
 
-      <div className="page">
-        <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
-
-        <div className="main">
-          <div className="actions">
-            <div className="header">
-              <h1>Mes Dépenses</h1>
-              <p>Suivi des achats et factures fournisseurs</p>
-            </div>
-            <button className="btn" onClick={() => setOpen(true)}>
-              <IconPlus /> Nouvelle dépense
-            </button>
+      <div style={{ marginLeft: '260px', padding: '30px', width: '100%' }}>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div>
+            <h1 style={{ margin: 0, color: '#1e293b' }}>Mes Dépenses</h1>
+            <p style={{ color: '#64748b' }}>Saisissez vos achats fournisseurs (Eau, Loyer, Marchandises...)</p>
           </div>
-
-          <div className="card">
-            <div className="card-header"><h3>Dépenses ({depenses.length})</h3></div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Fournisseur</th>
-                  <th>Réf</th>
-                  <th className="text-right">TTC</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {depenses.map(f => (
-                  <tr key={f.id}>
-                    <td data-label="Date">{new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
-                    <td data-label="Fournisseur">{f.client_nom}</td>
-                    <td data-label="Réf">#{f.numero}</td>
-                    <td data-label="TTC" className="text-right text-red">{f.total_ttc.toLocaleString()} F</td>
-                    <td>
-                      <button onClick={() => pdf(f)} style={{background:'#fef2f2',border:'none',borderRadius:'8px',padding:'8px',cursor:'pointer'}}>
-                        <IconPDF />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {depenses.length === 0 && (
-                  <tr><td colSpan={5} style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Aucune dépense enregistrée</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <button onClick={() => setIsModalOpen(true)} style={btnStyle('#ef4444')}>
+            - Nouvelle Dépense
+          </button>
         </div>
+
+        {/* TABLEAU DES DÉPENSES */}
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ background: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>
+              <tr>
+                <th style={thStyle}>Numéro</th>
+                <th style={thStyle}>Date</th>
+                <th style={thStyle}>Fournisseur</th>
+                <th style={{...thStyle, textAlign:'right'}}>Montant TTC</th>
+                <th style={{...thStyle, textAlign:'right'}}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {depenses.map(d => (
+                <tr key={d.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{...tdStyle, color:'#64748b', fontSize:'0.9rem'}}>{d.numero}</td>
+                  <td style={tdStyle}>{d.date_emission}</td>
+                  <td style={{...tdStyle, fontWeight:'bold'}}>{d.client_nom}</td>
+                  <td style={{...tdStyle, textAlign:'right', fontWeight:'bold', color:'#ef4444'}}>
+                    - {d.total_ttc.toLocaleString()} F
+                  </td>
+                  <td style={{...tdStyle, textAlign:'right'}}>
+                    <button onClick={() => generatePDF(d)} style={{cursor:'pointer', border:'none', background:'#e2e8f0', padding:'5px 10px', borderRadius:4}}>🖨️ PDF</button>
+                  </td>
+                </tr>
+              ))}
+               {depenses.length === 0 && <tr><td colSpan="5" style={{padding: 30, textAlign: 'center', color: '#94a3b8'}}>Aucune dépense enregistrée.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
       </div>
 
-      {/* MODAL */}
-      {open && (
-        <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">Nouvelle dépense</div>
-              <button onClick={() => setOpen(false)} style={{background:'none',border:'none',cursor:'pointer'}}><IconClose /></button>
-            </div>
-            <div className="modal-body">
-              <form onSubmit={sauver}>
-                <div className="grid">
-                  <div className="group">
-                    <label>Fournisseur</label>
-                    <input required list="fournisseurs" value={fournisseur} onChange={e => setFournisseur(e.target.value)} placeholder="Ex: Orange, Total…" />
-                    <datalist id="fournisseurs">
-                      {fournisseurs.map((f, i) => <option key={i} value={f.nom_complet} />)}
-                    </datalist>
-                  </div>
-                  <div className="group">
-                    <label>Date</label>
-                    <input type="date" required value={date} onChange={e => setDate(e.target.value)} />
-                  </div>
+      {/* MODAL DE SAISIE */}
+      {isModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
+          <div style={{ background: 'white', padding: '30px', borderRadius: '10px', width: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginTop: 0, color:'#ef4444' }}>Saisir une Dépense</h2>
+            
+            <form onSubmit={handleSave}>
+              {/* EN-TÊTE */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                <div>
+                  <label style={labelStyle}>Fournisseur</label>
+                  {/* LISTE DÉROULANTE FOURNISSEURS */}
+                  <select 
+                    value={fournisseurId} 
+                    onChange={handleFournisseurSelect} 
+                    style={inputStyle} 
+                    required
+                  >
+                    <option value="">-- Choisir un fournisseur --</option>
+                    {listeFournisseurs.map((f, i) => (
+                        <option key={i} value={f.id}>{f.nom_complet}</option>
+                    ))}
+                  </select>
+                  {listeFournisseurs.length === 0 && <small style={{color:'red'}}>Aucun fournisseur. Ajoutez-en dans "Clients / Fourniss."</small>}
                 </div>
-
-                <div className="lines">
-                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'1rem',fontWeight:'600'}}>
-                    <span>Détail des achats</span>
-                    <button type="button" onClick={ajouterLigne} style={{color:'#dc2626',background:'none',border:'none',fontWeight:'bold'}}>+ Ajouter une ligne</button>
-                  </div>
-
-                  {lignes.map((l, i) => (
-                    <div key={i} className="line">
-                      <input placeholder="Description" value={l.description} onChange={e => majLigne(i,'description',e.target.value)} />
-                      <input type="number" placeholder="Qté" value={l.quantite} onChange={e => majLigne(i,'quantite',e.target.value)} />
-                      <input placeholder="Unité" value={l.unite} onChange={e => majLigne(i,'unite',e.target.value)} />
-                      <input type="number" placeholder="Prix HT" value={l.prix} onChange={e => majLigne(i,'prix',e.target.value)} />
-                      {lignes.length > 1 && (
-                        <button type="button" onClick={() => supprimerLigne(i)} style={{color:'#dc2626',background:'none',border:'none'}}>
-                          <IconTrash />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div>
+                  <label style={labelStyle}>Date Facture</label>
+                  <input type="date" required value={dateEmission} onChange={e => setDateEmission(e.target.value)} style={inputStyle} />
                 </div>
+              </div>
 
-                <div className="total">
-                  Total TTC : {totalTTC.toLocaleString()} FCFA
-                  <small style={{display:'block',color:'#64748b',fontSize:'.9rem'}}>
-                    HT : {totalHT.toLocaleString()} F + TVA 18% : {tva.toLocaleString()} F
-                  </small>
+              {/* LIGNES */}
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '5px', fontWeight: 'bold', color: '#64748b', fontSize: '0.9rem' }}>
+                <span>Description (ex: Loyer, Essence)</span><span>Qté</span><span>Unité</span><span>Prix Total</span><span></span>
+              </div>
+
+              {lignes.map((l, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                  
+                  <input 
+                    type="text" 
+                    placeholder="Quoi ?" 
+                    value={l.description} 
+                    onChange={e => updateLigne(idx, 'description', e.target.value)} 
+                    style={inputStyle} 
+                    required
+                  />
+
+                  <input type="number" placeholder="1" min="1" value={l.quantite} onChange={e => updateLigne(idx, 'quantite', Number(e.target.value))} style={inputStyle} />
+                  <input type="text" placeholder="U" value={l.unite} onChange={e => updateLigne(idx, 'unite', e.target.value)} style={inputStyle} />
+                  <input type="number" placeholder="Prix" value={l.prix} onChange={e => updateLigne(idx, 'prix', Number(e.target.value))} style={inputStyle} required />
+                  
+                  {lignes.length > 1 && <button type="button" onClick={() => removeLigne(idx)} style={{color:'red', border:'none', background:'none', cursor:'pointer', fontWeight:'bold'}}>X</button>}
                 </div>
+              ))}
+              
+              <button type="button" onClick={addLigne} style={{ marginBottom: '20px', background: '#f1f5f9', border: '1px dashed #cbd5e1', padding: '8px', width: '100%', cursor: 'pointer' }}>+ Ajouter une ligne</button>
 
-                <button type="submit" className="submit">Enregistrer la dépense</button>
-              </form>
-            </div>
+              <div style={{ textAlign: 'right', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '20px' }}>
+                Total à payer : {calculateTotal().toLocaleString()} FCFA
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '10px 20px', border: '1px solid #ddd', background: 'white', borderRadius: '5px', cursor: 'pointer' }}>Annuler</button>
+                <button type="submit" style={{ padding: '10px 20px', border: 'none', background: '#ef4444', color: 'white', borderRadius: '5px', cursor: 'pointer', fontWeight:'bold' }}>Enregistrer</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-    </>
-  );
+    </div>
+  )
 }
+
+const btnStyle = (bg) => ({ padding: '10px 20px', background: bg, color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' })
+const thStyle = { padding: '12px 15px', textAlign: 'left', color: '#64748b', fontWeight: '600', background: '#f8fafc' }
+const tdStyle = { padding: '12px 15px', color: '#334155' }
+const labelStyle = { display: 'block', marginBottom: 5, fontSize: '0.9rem', color: '#64748b' }
+const inputStyle = { width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }
