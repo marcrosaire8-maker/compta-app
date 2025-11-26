@@ -7,11 +7,11 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 /* ICÔNES */
-const IconSync = () => <span>🔄</span>;
+const IconSync = () => <span>⚡</span>; // Éclair pour la vitesse
 const IconPlus = () => <span>＋</span>;
 const IconDownload = () => <span>📥</span>;
 
-/* STYLES */
+/* STYLES CSS */
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
   body { margin: 0; font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; }
@@ -30,7 +30,10 @@ const styles = `
   /* ACTIONS */
   .actions { display: flex; gap: 10px; }
   .btn { padding: 0.8rem 1.5rem; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; display: flex; gap: 0.5rem; align-items: center; color: white; font-size: 0.9rem; }
-  .btn-blue { background: #3b82f6; } .btn-green { background: #10b981; } .btn-orange { background: #f97316; }
+  .btn-blue { background: #3b82f6; } .btn-green { background: #10b981; } 
+  .btn-orange { background: #f97316; animation: pulse 2s infinite; }
+  
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
 
   /* TABLEAU */
   .table-container { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
@@ -78,7 +81,7 @@ export default function Journal() {
     const ste = await getEntrepriseForUser(user.id, user.email);
     if (ste) {
       setEntreprise(ste);
-      fetchComptes(ste.id);
+      await fetchComptes(ste.id); // On attend les comptes avant de charger
       fetchEcritures(ste.id);
     }
     setLoading(false);
@@ -114,70 +117,100 @@ export default function Journal() {
     setTotalCredit(tC);
   }
 
-  // --- MOTEUR D'IMPORTATION AUTOMATIQUE ---
-  const syncCommercialToCompta = async () => {
-    if (!confirm("Importer les factures et dépenses non comptabilisées ?")) return;
+  // --- 🚀 LE MOTEUR D'IMPORTATION UNIFIÉ ---
+  const syncTout = async () => {
     setSyncing(true);
+    let count = 0;
 
     try {
-        // 1. Récupérer les factures non traitées
+        // --- 1. IMPORTER LES FACTURES (VENTES & ACHATS) ---
         const { data: factures } = await supabase
             .from('factures')
             .select('*')
             .eq('entreprise_id', entreprise.id)
             .eq('est_comptabilise', false);
 
-        if (!factures || factures.length === 0) {
-            alert("Rien à importer. Tout est à jour !");
-            setSyncing(false);
-            return;
-        }
+        if (factures) {
+            for (const fac of factures) {
+                // Créer l'écriture
+                const { data: ecriture } = await supabase.from('ecritures_comptables').insert([{
+                    entreprise_id: entreprise.id,
+                    date_ecriture: fac.date_emission,
+                    libelle: `${fac.type_facture} N°${fac.numero} - ${fac.client_nom}`,
+                    journal_code: fac.type_facture === 'VENTE' ? 'VT' : 'AC',
+                    facture_liee_id: fac.id
+                }]).select().single();
 
-        let count = 0;
+                // Trouver les IDs de comptes (Helper)
+                const getCpt = (code) => comptes.find(c => c.code_compte.toString().startsWith(code))?.id;
+                
+                const lignes = [];
+                if (fac.type_facture === 'VENTE') {
+                    lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('411'), debit: fac.total_ttc, credit: 0 }); // Client
+                    lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('701'), debit: 0, credit: fac.total_ht }); // Vente
+                    if(fac.total_tva > 0) lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('443'), debit: 0, credit: fac.total_tva }); // TVA
+                } else {
+                    lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('601'), debit: fac.total_ht, credit: 0 }); // Achat
+                    if(fac.total_tva > 0) lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('445'), debit: fac.total_tva, credit: 0 }); // TVA
+                    lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('401'), debit: 0, credit: fac.total_ttc }); // Fournisseur
+                }
 
-        for (const fac of factures) {
-            // Créer l'écriture
-            const { data: ecriture, error: errE } = await supabase.from('ecritures_comptables').insert([{
-                entreprise_id: entreprise.id,
-                date_ecriture: fac.date_emission,
-                libelle: `${fac.type_facture === 'VENTE' ? 'Vente' : 'Achat'} N°${fac.numero} - ${fac.client_nom}`,
-                journal_code: fac.type_facture === 'VENTE' ? 'VT' : 'AC',
-                facture_liee_id: fac.id
-            }]).select().single();
-
-            if (errE) throw errE;
-
-            // Trouver les IDs de comptes (Simplifié : On cherche par code)
-            const getCpt = (code) => comptes.find(c => c.code_compte.startsWith(code))?.id;
-            
-            const lignes = [];
-            if (fac.type_facture === 'VENTE') {
-                // Client (411) Débit / Vente (701) Crédit
-                lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('411'), debit: fac.total_ttc, credit: 0 });
-                lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('701'), debit: 0, credit: fac.total_ht });
-                if(fac.total_tva > 0) lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('443'), debit: 0, credit: fac.total_tva });
-            } else {
-                // Achat (601) Débit / Fournisseur (401) Crédit
-                lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('601'), debit: fac.total_ht, credit: 0 });
-                if(fac.total_tva > 0) lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('445'), debit: fac.total_tva, credit: 0 });
-                lignes.push({ ecriture_id: ecriture.id, compte_id: getCpt('401'), debit: 0, credit: fac.total_ttc });
-            }
-
-            // Insertion des lignes
-            const validLignes = lignes.filter(l => l.compte_id);
-            if (validLignes.length > 0) {
-                await supabase.from('lignes_ecriture').insert(validLignes);
-                // Marquer comme traité
-                await supabase.from('factures').update({ est_comptabilise: true }).eq('id', fac.id);
-                count++;
+                const validLignes = lignes.filter(l => l.compte_id);
+                if (validLignes.length > 0) {
+                    await supabase.from('lignes_ecriture').insert(validLignes);
+                    await supabase.from('factures').update({ est_comptabilise: true }).eq('id', fac.id);
+                    count++;
+                }
             }
         }
 
-        alert(`${count} opérations comptabilisées !`);
-        fetchEcritures(entreprise.id);
+        // --- 2. IMPORTER LES PAIES (NOUVEAU) ---
+        const { data: paies } = await supabase
+            .from('fiches_paie')
+            .select('*')
+            .eq('entreprise_id', entreprise.id)
+            .eq('est_comptabilise', false);
+
+        if (paies) {
+            for (const p of paies) {
+                const { data: ecriture } = await supabase.from('ecritures_comptables').insert([{
+                    entreprise_id: entreprise.id,
+                    date_ecriture: p.date_paie,
+                    libelle: `Paie ${p.mois} - ${p.employe_nom || 'Salarié'}`,
+                    journal_code: 'OD'
+                }]).select().single();
+
+                const getCpt = (code) => comptes.find(c => c.code_compte.toString().startsWith(code))?.id;
+
+                // 661 (Charge) / 422 (Net à payer)
+                const lignesPaie = [
+                    { ecriture_id: ecriture.id, compte_id: getCpt('661'), debit: p.salaire_brut, credit: 0 },
+                    { ecriture_id: ecriture.id, compte_id: getCpt('422'), debit: 0, credit: p.salaire_net }
+                ];
+                // Si écart (cotisations), on met dans 431 (Sécu) pour équilibrer
+                const diff = p.salaire_brut - p.salaire_net;
+                if (diff > 0) {
+                     lignesPaie.push({ ecriture_id: ecriture.id, compte_id: getCpt('431'), debit: 0, credit: diff });
+                }
+
+                const validLignes = lignesPaie.filter(l => l.compte_id);
+                if (validLignes.length > 0) {
+                    await supabase.from('lignes_ecriture').insert(validLignes);
+                    await supabase.from('fiches_paie').update({ est_comptabilise: true }).eq('id', p.id);
+                    count++;
+                }
+            }
+        }
+
+        if (count > 0) {
+            alert(`${count} nouvelles opérations ont été intégrées au journal !`);
+            fetchEcritures(entreprise.id);
+        } else {
+            alert("Aucune nouvelle opération à synchroniser.");
+        }
 
     } catch (error) {
-        alert("Erreur import : " + error.message);
+        alert("Erreur de synchro : " + error.message);
     } finally {
         setSyncing(false);
     }
@@ -199,7 +232,6 @@ export default function Journal() {
 
         alert("Écriture validée !");
         setIsModalOpen(false);
-        setForm({ ...form, libelle: '', montant: '' });
         fetchEcritures(entreprise.id);
     } catch (err) { alert(err.message); }
   };
@@ -210,7 +242,7 @@ export default function Journal() {
       ecritures.forEach(e => {
           e.lignes_ecriture.forEach(l => {
               flatData.push({
-                  Date: e.date_ecriture, Journal: e.journal_code, Libellé: e.libelle,
+                  Date: e.date_ecriture, Jnl: e.journal_code, Pièce: e.libelle,
                   Compte: l.plan_comptable?.code_compte, Intitulé: l.plan_comptable?.libelle,
                   Débit: l.debit, Crédit: l.credit
               });
@@ -234,11 +266,11 @@ export default function Journal() {
           <div className="header">
             <div>
                 <h1>Journal Comptable</h1>
-                <p>Le grand livre de vos opérations (Achats, Ventes, OD)</p>
+                <p>Centralisation automatique des opérations</p>
             </div>
             <div className="actions">
-                <button onClick={syncCommercialToCompta} disabled={syncing} className="btn btn-orange">
-                    {syncing ? "..." : <><IconSync/> Importer Factures</>}
+                <button onClick={syncTout} disabled={syncing} className="btn btn-orange">
+                    {syncing ? "Traitement..." : <><IconSync/> TOUT SYNCHRONISER</>}
                 </button>
                 <button onClick={() => setIsModalOpen(true)} className="btn btn-blue"><IconPlus/> Saisie Manuelle</button>
                 <button onClick={exportExcel} className="btn btn-green"><IconDownload/> Excel</button>
@@ -257,7 +289,7 @@ export default function Journal() {
             <div className="kpi-card" style={{borderLeftColor: totalDebit === totalCredit ? '#10b981' : '#dc2626'}}>
                 <div className="kpi-label">État</div>
                 <div className="kpi-value" style={{color: totalDebit === totalCredit ? '#10b981' : '#dc2626'}}>
-                    {totalDebit === totalCredit ? "ÉQUILIBRÉ" : "ERREUR"}
+                    {totalDebit === totalCredit ? "ÉQUILIBRÉ ✅" : "ERREUR ⚠️"}
                 </div>
             </div>
           </div>
@@ -281,27 +313,28 @@ export default function Journal() {
                             </tr>
                         ))
                     ))}
-                    {ecritures.length === 0 && <tr><td colSpan="7" style={{textAlign:'center', padding:30, color:'#94a3b8'}}>Journal vide.</td></tr>}
+                    {ecritures.length === 0 && <tr><td colSpan="7" style={{textAlign:'center', padding:30, color:'#94a3b8'}}>Journal vide. Cliquez sur "Tout Synchroniser".</td></tr>}
                 </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL SAISIE MANUELLE */}
       {isModalOpen && (
         <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
                 <h2 style={{marginTop:0}}>Saisie Manuelle (OD)</h2>
+                <p style={{color:'#64748b', fontSize:'0.9rem', marginBottom:20}}>Pour Capital, TVA, Emprunts...</p>
                 <form onSubmit={handleManualSave}>
                     <div className="input-group"><label>Date</label><input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required /></div>
-                    <div className="input-group"><label>Libellé</label><input type="text" value={form.libelle} onChange={e => setForm({...form, libelle: e.target.value})} required /></div>
+                    <div className="input-group"><label>Libellé</label><input type="text" value={form.libelle} onChange={e => setForm({...form, libelle: e.target.value})} placeholder="Ex: Capital Social" required /></div>
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:15}}>
                         <div className="input-group"><label>Cpt Débit</label><select value={form.compteDebit} onChange={e => setForm({...form, compteDebit: e.target.value})} required><option value="">Choisir...</option>{comptes.map(c => <option key={c.id} value={c.id}>{c.code_compte} - {c.libelle}</option>)}</select></div>
                         <div className="input-group"><label>Cpt Crédit</label><select value={form.compteCredit} onChange={e => setForm({...form, compteCredit: e.target.value})} required><option value="">Choisir...</option>{comptes.map(c => <option key={c.id} value={c.id}>{c.code_compte} - {c.libelle}</option>)}</select></div>
                     </div>
                     <div className="input-group"><label>Montant</label><input type="number" value={form.montant} onChange={e => setForm({...form, montant: e.target.value})} required /></div>
-                    <button type="submit" className="btn btn-blue" style={{width:'100%', justifyContent:'center'}}>Valider</button>
+                    <button type="submit" className="btn btn-blue" style={{width:'100%', justifyContent:'center', marginTop:10}}>Valider</button>
                 </form>
             </div>
         </div>
