@@ -1,4 +1,3 @@
-// src/pages/Editions.jsx
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
@@ -6,228 +5,40 @@ import Sidebar from '../components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-/* --- ICÔNES SVG --- */
+/* --- ICÔNES --- */
 const IconBook = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>;
 const IconBox = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>;
 const IconSearch = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>;
-const IconPDF = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>;
+const IconPDF = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>;
 const IconRefresh = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>;
 
-/* --- STYLES CSS IN-JS --- */
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  /* CORRECTIF CRITIQUE MOBILE */
-  @media (max-width: 900px) {
-    main {
-      margin-left: 0 !important;
-      padding: 1rem !important;
-      width: 100% !important;
-    }
-  }
-
-  * { box-sizing: border-box; }
-  body { font-family: 'Inter', sans-serif; margin: 0; background: #f8fafc; color: #0f172a; }
-
-  /* LAYOUT */
-  .layout { display: flex; min-height: 100vh; width: 100%; }
-  
-  .main-area {
-    margin-left: 260px;
-    padding: 2rem;
-    width: 100%;
-    transition: all 0.3s ease;
-    background: #f8fafc;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .dashboard-container {
-    width: 100%;
-    max-width: 1000px;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  /* HEADER */
-  .header-content { text-align: center; margin-bottom: 1rem; }
-  .header-content h1 {
-    font-size: 1.6rem;
-    font-weight: 800;
-    margin: 0 0 0.5rem 0;
-    color: #0f172a;
-    line-height: 1.2;
-  }
-  .header-content p { color: #64748b; font-size: 0.9rem; margin: 0; }
-
-  /* ONGLETS (Segmented Control) */
-  .tabs-wrapper {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    margin-bottom: 0.5rem;
-  }
-  .tabs-container {
-    background: #e2e8f0;
-    padding: 4px;
-    border-radius: 12px;
-    display: flex;
-    gap: 4px;
-    width: 100%;
-    max-width: 500px;
-  }
-  .tab-btn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-    color: #64748b;
-    background: transparent;
-    transition: all 0.2s;
-  }
-  .tab-btn.active {
-    background: white;
-    color: #0f172a;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-
-  /* CONTROLS CARD */
-  .controls-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  }
-
-  .controls-header {
-    margin-bottom: 1.5rem;
-    border-bottom: 1px dashed #e2e8f0;
-    padding-bottom: 1rem;
-  }
-  .controls-header h3 { margin: 0 0 0.25rem 0; font-size: 1.1rem; }
-  .controls-header p { margin: 0; color: #64748b; font-size: 0.9rem; }
-
-  .controls-flex {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    align-items: flex-end;
-  }
-
-  .input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    flex: 1;
-    min-width: 150px;
-  }
-  .label { font-size: 0.85rem; font-weight: 600; color: #64748b; }
-  .input {
-    padding: 0.75rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    background: #f8fafc;
-    width: 100%;
-  }
-  .input:focus { border-color: #4f46e5; background: white; outline: none; }
-
-  .btn {
-    padding: 0.75rem 1.25rem;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    font-size: 0.95rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.1s;
-  }
-  .btn:active { transform: translateY(1px); }
-  
-  .btn-primary { background: #4f46e5; color: white; }
-  .btn-danger { background: #ef4444; color: white; }
-  .btn-ghost { background: white; border: 1px solid #cbd5e1; color: #475569; }
-
-  /* TABLE CARD WRAPPER */
-  .table-card {
-    background: white;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    overflow: hidden;
-  }
-
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #f8fafc; padding: 1rem; text-align: left; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
-  td { padding: 1rem; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; color: #0f172a; }
-
-  /* MOBILE TABLE TRANSFORMATION */
-  @media (max-width: 900px) {
-    .header-content { text-align: left; }
-    .controls-flex { flex-direction: column; align-items: stretch; }
-    .input-group { width: 100%; }
-    
-    thead { display: none; }
-    tr { display: block; border-bottom: 1px solid #e2e8f0; padding: 1rem; }
-    tr:last-child { border-bottom: none; }
-    
-    td {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.5rem 0;
-      border: none;
-      text-align: right;
-    }
-    
-    td::before {
-      content: attr(data-label);
-      font-weight: 600;
-      color: #64748b;
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      margin-right: 1rem;
-    }
-
-    /* Style spécifique pour journal sur mobile pour éviter l'encombrement */
-    .journal-row {
-      display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem;
-    }
-    .journal-row td { width: 100%; }
-  }
-
-  @media (min-width: 900px) {
-    .header-content { text-align: left; display: flex; justify-content: space-between; align-items: center; }
-  }
-`;
-
-export default function Editions() {
+export default function EditionsUltimate() {
+  // --- STATES ---
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
   const [activeTab, setActiveTab] = useState('journal');
   
-  // Filtres
+  // UI States
+  const [darkMode, setDarkMode] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  // Filters & Data
   const [dateDebut, setDateDebut] = useState(`${new Date().getFullYear()}-01-01`);
   const [dateFin, setDateFin] = useState(`${new Date().getFullYear()}-12-31`);
-
-  // Données
   const [journalData, setJournalData] = useState([]);
   const [inventaireData, setInventaireData] = useState([]);
 
   useEffect(() => { initData(); }, []);
+
+  // Parallaxe Effect
+  const handleMouseMove = (e) => {
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    const x = (clientX / innerWidth) * 2 - 1;
+    const y = (clientY / innerHeight) * 2 - 1;
+    setMousePos({ x, y });
+  };
 
   async function initData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -237,7 +48,9 @@ export default function Editions() {
     setLoading(false);
   }
 
+  // --- LOGIC (JOURNAL & INVENTAIRE) ---
   async function fetchJournal() {
+    // Petit délai artificiel pour montrer l'animation de chargement si c'est trop rapide
     setLoading(true);
     const { data, error } = await supabase
       .from('lignes_ecriture')
@@ -272,7 +85,7 @@ export default function Editions() {
     doc.setFontSize(10); doc.text(`Période : ${dateDebut} au ${dateFin}`, 14, 28);
 
     const rows = journalData.map(L => [
-      L.ecriture.date_ecriture,
+      new Date(L.ecriture.date_ecriture).toLocaleDateString(),
       L.ecriture.numero_piece?.toString().substring(0, 8),
       L.compte.code_compte,
       L.compte.libelle,
@@ -285,7 +98,8 @@ export default function Editions() {
       startY: 35,
       head: [['Date', 'Ref', 'Cpt', 'Compte', 'Libellé', 'Débit', 'Crédit']],
       body: rows,
-      styles: { fontSize: 8 },
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] }
     });
     doc.save('livre_journal.pdf');
   };
@@ -303,172 +117,367 @@ export default function Editions() {
     });
     rows.push(['TOTAL', '', '', totalValeur.toLocaleString()]);
 
-    autoTable(doc, { startY: 35, head: [['Désignation', 'Qté', 'PU (Est.)', 'Valeur']], body: rows });
+    autoTable(doc, {
+      startY: 35,
+      head: [['Désignation', 'Qté', 'PU (Est.)', 'Valeur']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129] }
+    });
     doc.save('livre_inventaire.pdf');
   };
 
-  if (loading) return <div style={{height:'100vh', display:'grid', placeItems:'center'}}>Chargement...</div>;
-
   return (
-    <div className="layout">
-      <style>{styles}</style>
-      
-      <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
+    <div className={`app-wrapper ${darkMode ? 'dark' : 'light'}`} onMouseMove={handleMouseMove}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-      <main className="main-area">
-        <div className="dashboard-container">
+        :root {
+          --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .light {
+          --bg-main: #f2f2f7;
+          --bg-glass: rgba(255, 255, 255, 0.65);
+          --bg-card: #ffffff;
+          --text-primary: #1d1d1f;
+          --text-secondary: #86868b;
+          --border: rgba(0,0,0,0.06);
+          --shadow: 0 10px 40px -10px rgba(0,0,0,0.1);
+          --accent: #4f46e5;
+          --accent-glow: rgba(79, 70, 229, 0.3);
+          --input-bg: #f5f5f7;
+        }
+
+        .dark {
+          --bg-main: #000000;
+          --bg-glass: rgba(28, 28, 30, 0.65);
+          --bg-card: #1c1c1e;
+          --text-primary: #f5f5f7;
+          --text-secondary: #a1a1a6;
+          --border: rgba(255,255,255,0.15);
+          --shadow: 0 20px 50px -10px rgba(0,0,0,0.6);
+          --accent: #6366f1;
+          --accent-glow: rgba(99, 102, 241, 0.4);
+          --input-bg: #2c2c2e;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; background: var(--bg-main); transition: background 0.5s ease; }
+
+        .app-wrapper { min-height: 100vh; position: relative; }
+
+        /* --- BACKGROUND ORBS --- */
+        .orb {
+          position: fixed; border-radius: 50%; filter: blur(120px); z-index: 0; pointer-events: none; opacity: 0.4;
+        }
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--accent); }
+        .orb-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #ec4899; } /* Pink/Magenta */
+
+        /* --- SIDEBAR & OVERLAY --- */
+        .sidebar-wrapper {
+          position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 50;
+          transition: transform 0.3s ease;
+        }
+        .mobile-overlay {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 40;
+          display: none; opacity: 0; transition: opacity 0.3s;
+        }
+
+        /* --- MAIN LAYOUT --- */
+        main {
+          min-height: 100vh;
+          padding: 40px;
+          margin-left: 260px;
+          position: relative; 
+          z-index: 1;
+          transition: margin-left 0.3s ease;
+        }
+
+        /* --- HEADER --- */
+        .header-bar {
+          display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;
+          animation: slideDown 0.8s ease-out;
+        }
+        .header-content h1 {
+          font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 6px;
+          background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+          -webkit-background-clip: text; color: transparent;
+        }
+        .actions { display: flex; gap: 12px; align-items: center; }
+
+        .btn-menu-mobile {
+          display: none; background: var(--bg-card); border: 1px solid var(--border); 
+          color: var(--text-primary); font-size: 24px; padding: 8px 12px; 
+          border-radius: 12px; cursor: pointer;
+        }
+
+        .btn-theme {
+          width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border);
+          background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center;
+          font-size: 20px; transition: var(--transition); box-shadow: var(--shadow);
+        }
+        .btn-theme:hover { transform: scale(1.1); }
+
+        /* --- TABS SEGMENTED CONTROL --- */
+        .tabs-container {
+          background: var(--bg-glass);
+          padding: 6px; border-radius: 16px;
+          display: flex; gap: 8px; width: fit-content; margin: 0 auto 40px;
+          border: 1px solid var(--border);
+          box-shadow: var(--shadow);
+          animation: fadeUp 0.5s ease-out;
+        }
+        .tab-btn {
+          padding: 10px 24px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer;
+          display: flex; align-items: center; gap: 8px; transition: 0.3s;
+          background: transparent; color: var(--text-secondary);
+        }
+        .tab-btn.active {
+          background: var(--bg-card); color: var(--text-primary);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .tab-btn:hover:not(.active) { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+
+        /* --- FILTER CARD --- */
+        .filter-card {
+          background: var(--bg-glass); backdrop-filter: blur(20px);
+          border: 1px solid var(--border); border-radius: 20px;
+          padding: 24px; margin-bottom: 30px;
+          display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;
+          animation: zoomIn 0.4s ease-out;
+        }
+        .input-group { flex: 1; min-width: 150px; }
+        .input-group label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+        .input-field {
+          width: 100%; padding: 14px; border-radius: 12px; border: 1px solid transparent;
+          background: var(--input-bg); color: var(--text-primary); outline: none; transition: 0.3s;
+        }
+        .input-field:focus { border-color: var(--accent); background: var(--bg-card); }
+
+        .btn-action {
+          padding: 14px 28px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer;
+          display: flex; align-items: center; gap: 8px; transition: 0.3s; flex: 1; justify-content: center;
+        }
+        .btn-search { background: var(--text-primary); color: var(--bg-main); }
+        .btn-pdf { background: #ef4444; color: white; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3); }
+        .btn-refresh { background: var(--accent); color: white; box-shadow: 0 8px 20px var(--accent-glow); }
+        .btn-action:hover { transform: translateY(-2px); opacity: 0.9; }
+
+        /* --- GRID TABLE (JOURNAL/INVENTAIRE) --- */
+        .data-grid { display: flex; flex-direction: column; gap: 12px; }
+        
+        /* Headers differ based on content, defined in JSX */
+        .grid-header {
+          display: grid; gap: 16px; padding: 0 24px; margin-bottom: 5px;
+          color: var(--text-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase;
+        }
+        
+        .grid-row {
+          display: grid; gap: 16px; align-items: center;
+          background: var(--bg-glass); backdrop-filter: blur(20px);
+          border: 1px solid var(--border); border-radius: 18px;
+          padding: 16px 24px; transition: 0.3s;
+          animation: fadeSlide 0.4s ease-out backwards;
+        }
+        .grid-row:hover {
+          transform: scale(1.01); background: var(--bg-card);
+          border-color: var(--accent); z-index: 2;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+
+        .cell-main { font-weight: 700; color: var(--accent); font-size: 14px; font-family: 'Monaco', monospace; }
+        .cell-desc { font-weight: 500; color: var(--text-primary); font-size: 14px; }
+        .cell-date { font-size: 13px; color: var(--text-secondary); }
+        .cell-money { font-weight: 700; color: var(--text-primary); text-align: right; }
+        .cell-tag { 
+          background: rgba(79, 70, 229, 0.1); color: var(--accent); 
+          padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; width: fit-content;
+        }
+
+        /* --- MEDIA QUERIES --- */
+        @media (max-width: 1024px) {
+          .sidebar-wrapper { transform: translateX(-100%); }
+          .sidebar-wrapper.open { transform: translateX(0); }
+          .mobile-overlay.open { display: block; opacity: 1; }
+          main { margin-left: 0; padding: 20px; width: 100%; }
+          .btn-menu-mobile { display: block; }
+        }
+
+        @media (max-width: 768px) {
+          .header-bar { flex-direction: column; align-items: flex-start; }
+          .actions { width: 100%; justify-content: space-between; }
           
-          <div className="header-content">
-            <div>
+          .grid-header { display: none; }
+          .grid-row { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; }
+          
+          .grid-row div { width: 100%; display: flex; justify-content: space-between; }
+          .grid-row div::before { content: attr(data-label); color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+          
+          .cell-money { text-align: right; font-size: 16px; color: #10b981; } /* Highlight money on mobile */
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeSlide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+      `}</style>
+
+      {/* OVERLAY & SIDEBAR */}
+      <div className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`} onClick={() => setIsMobileMenuOpen(false)}></div>
+      <div className={`sidebar-wrapper ${isMobileMenuOpen ? 'open' : ''}`}>
+        <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
+      </div>
+
+      {/* PARALLAX ORBS */}
+      <div className="orb orb-1" style={{ transform: `translate(${mousePos.x * 20}px, ${mousePos.y * 20}px)` }}></div>
+      <div className="orb orb-2" style={{ transform: `translate(${mousePos.x * -20}px, ${mousePos.y * -20}px)` }}></div>
+
+      <main>
+        {/* HEADER */}
+        <div className="header-bar">
+          <div style={{display:'flex', alignItems:'center', gap:'15px', width:'100%'}}>
+            <button className="btn-menu-mobile" onClick={() => setIsMobileMenuOpen(true)}>☰</button>
+            <div className="header-content">
               <h1>Éditions Légales</h1>
-              <p>Générez vos livres comptables obligatoires (PDF).</p>
+              <div style={{color:'var(--text-secondary)'}}>Documents comptables officiels</div>
             </div>
           </div>
-
-          {/* ONGLETS */}
-          <div className="tabs-wrapper">
-            <div className="tabs-container">
-              <button onClick={() => setActiveTab('journal')} className={`tab-btn ${activeTab === 'journal' ? 'active' : ''}`}>
-                <div style={{width:18, height:18}}><IconBook /></div> Livre-Journal
-              </button>
-              <button onClick={() => setActiveTab('inventaire')} className={`tab-btn ${activeTab === 'inventaire' ? 'active' : ''}`}>
-                <div style={{width:18, height:18}}><IconBox /></div> Inventaire
-              </button>
-            </div>
+          <div className="actions">
+            <button className="btn-theme" onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
           </div>
-
-          {/* --- SECTION JOURNAL --- */}
-          {activeTab === 'journal' && (
-            <div className="dashboard-container">
-              
-              <div className="controls-card">
-                <div className="controls-header">
-                  <h3>Paramètres du Journal</h3>
-                  <p>Sélectionnez la période à exporter.</p>
-                </div>
-                <div className="controls-flex">
-                  <div className="input-group">
-                    <label className="label">Du</label>
-                    <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="input" />
-                  </div>
-                  <div className="input-group">
-                    <label className="label">Au</label>
-                    <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="input" />
-                  </div>
-                  <button onClick={fetchJournal} className="btn btn-primary" style={{flex:1}}>
-                    <div style={{width:18, height:18}}><IconSearch /></div> Rechercher
-                  </button>
-                  {journalData.length > 0 && (
-                    <button onClick={printLivreJournal} className="btn btn-danger" style={{flex:1}}>
-                      <div style={{width:18, height:18}}><IconPDF /></div> Télécharger
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {journalData.length > 0 ? (
-                <div className="table-card">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Compte</th>
-                        <th>Libellé</th>
-                        <th style={{textAlign:'right'}}>Débit</th>
-                        <th style={{textAlign:'right'}}>Crédit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {journalData.slice(0, 100).map((L, i) => (
-                        <tr key={i}>
-                          <td data-label="Date">{new Date(L.ecriture.date_ecriture).toLocaleDateString()}</td>
-                          <td data-label="Compte">
-                            <span style={{fontWeight:'700', color:'#4f46e5'}}>{L.compte.code_compte}</span>
-                            <br/><span style={{fontSize:'0.8rem', color:'#64748b'}}>{L.compte.libelle}</span>
-                          </td>
-                          <td data-label="Libellé">{L.ecriture.libelle}</td>
-                          <td data-label="Débit" style={{textAlign:'right', fontFamily:'monospace', fontWeight:'600'}}>
-                            {L.debit > 0 ? L.debit.toLocaleString() : '-'}
-                          </td>
-                          <td data-label="Crédit" style={{textAlign:'right', fontFamily:'monospace', fontWeight:'600'}}>
-                            {L.credit > 0 ? L.credit.toLocaleString() : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div style={{padding:'1rem', textAlign:'center', color:'#64748b', fontSize:'0.85rem', borderTop:'1px solid #e2e8f0'}}>
-                    Affichage des 100 premières lignes. Téléchargez le PDF pour le document complet.
-                  </div>
-                </div>
-              ) : (
-                <div style={{textAlign:'center', padding:'3rem', color:'#94a3b8', background:'white', borderRadius:12, border:'1px solid #e2e8f0'}}>
-                  Aucune écriture trouvée sur cette période.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* --- SECTION INVENTAIRE --- */}
-          {activeTab === 'inventaire' && (
-            <div className="dashboard-container">
-               <div className="controls-card">
-                <div className="controls-header">
-                  <h3>Valorisation des Stocks</h3>
-                  <p>État du stock à l'instant T (Quantité × Prix Vente Estimé).</p>
-                </div>
-                <div className="controls-flex">
-                   <button onClick={fetchInventaire} className="btn btn-ghost">
-                    <div style={{width:18, height:18}}><IconRefresh /></div> Actualiser
-                  </button>
-                  {inventaireData.length > 0 && (
-                    <button onClick={printInventaire} className="btn btn-danger">
-                      <div style={{width:18, height:18}}><IconPDF /></div> Télécharger PDF
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {inventaireData.length > 0 ? (
-                <div className="table-card">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Article</th>
-                        <th style={{textAlign:'center'}}>Quantité</th>
-                        <th style={{textAlign:'right'}}>P.U. (Est.)</th>
-                        <th style={{textAlign:'right'}}>Valeur Totale</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inventaireData.map((p, i) => (
-                        <tr key={i}>
-                          <td data-label="Article" style={{fontWeight:'600'}}>{p.nom}</td>
-                          <td data-label="Quantité" style={{textAlign:'center'}}>
-                            <span style={{background:'#eff6ff', color:'#2563eb', padding:'4px 8px', borderRadius:4, fontSize:'0.85rem', fontWeight:'700'}}>
-                              {p.stock_actuel} {p.unite}
-                            </span>
-                          </td>
-                          <td data-label="P.U." style={{textAlign:'right'}}>
-                            {p.prix_vente.toLocaleString()}
-                          </td>
-                          <td data-label="Valeur" style={{textAlign:'right', fontWeight:'700', color:'#10b981'}}>
-                            {(p.stock_actuel * p.prix_vente).toLocaleString()} F
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                 <div style={{textAlign:'center', padding:'3rem', color:'#94a3b8', background:'white', borderRadius:12, border:'1px solid #e2e8f0'}}>
-                  Aucun stock détecté. Cliquez sur "Actualiser".
-                </div>
-              )}
-            </div>
-          )}
-
         </div>
+
+        {/* TABS SWITCHER */}
+        <div className="tabs-container">
+          <button onClick={() => setActiveTab('journal')} className={`tab-btn ${activeTab === 'journal' ? 'active' : ''}`}>
+            <div style={{width:18, height:18}}><IconBook /></div> Livre-Journal
+          </button>
+          <button onClick={() => setActiveTab('inventaire')} className={`tab-btn ${activeTab === 'inventaire' ? 'active' : ''}`}>
+            <div style={{width:18, height:18}}><IconBox /></div> Inventaire
+          </button>
+        </div>
+
+        {/* ================= JOURNAL SECTION ================= */}
+        {activeTab === 'journal' && (
+          <div style={{animation:'fadeUp 0.5s ease-out'}}>
+            
+            {/* FILTERS CARD */}
+            <div className="filter-card">
+              <div className="input-group">
+                <label>Date Début</label>
+                <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="input-field" />
+              </div>
+              <div className="input-group">
+                <label>Date Fin</label>
+                <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="input-field" />
+              </div>
+              <button onClick={fetchJournal} className="btn-action btn-search">
+                <div style={{width:18, height:18}}><IconSearch /></div> Rechercher
+              </button>
+              {journalData.length > 0 && (
+                <button onClick={printLivreJournal} className="btn-action btn-pdf">
+                  <div style={{width:18, height:18}}><IconPDF /></div> PDF
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+               <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)'}}>Chargement des écritures...</div>
+            ) : journalData.length > 0 ? (
+              <div className="data-grid">
+                {/* Header PC */}
+                <div className="grid-header" style={{gridTemplateColumns: '1fr 0.8fr 1.5fr 2fr 1fr 1fr'}}>
+                  <div>Date</div>
+                  <div>Compte</div>
+                  <div>Libellé du Compte</div>
+                  <div>Libellé Écriture</div>
+                  <div style={{textAlign:'right'}}>Débit</div>
+                  <div style={{textAlign:'right'}}>Crédit</div>
+                </div>
+
+                {/* Rows */}
+                {journalData.slice(0, 100).map((L, i) => (
+                  <div key={i} className="grid-row" style={{gridTemplateColumns: '1fr 0.8fr 1.5fr 2fr 1fr 1fr', animationDelay: `${i * 0.02}s`}}>
+                    <div className="cell-date" data-label="Date">{new Date(L.ecriture.date_ecriture).toLocaleDateString()}</div>
+                    <div className="cell-main" data-label="Compte">{L.compte.code_compte}</div>
+                    <div className="cell-desc" data-label="Intitulé Cpt" style={{fontSize:'13px', opacity:0.8}}>{L.compte.libelle}</div>
+                    <div className="cell-desc" data-label="Libellé" style={{fontStyle:'italic'}}>{L.ecriture.libelle}</div>
+                    <div className="cell-money" data-label="Débit" style={{color: L.debit > 0 ? 'var(--text-primary)' : 'transparent'}}>
+                      {L.debit > 0 ? L.debit.toLocaleString() : '-'}
+                    </div>
+                    <div className="cell-money" data-label="Crédit" style={{color: L.credit > 0 ? 'var(--text-primary)' : 'transparent'}}>
+                      {L.credit > 0 ? L.credit.toLocaleString() : '-'}
+                    </div>
+                  </div>
+                ))}
+                
+                <div style={{textAlign:'center', padding:'20px', color:'var(--text-secondary)', fontSize:'12px'}}>
+                  Affichage des 100 premières lignes. Générez le PDF pour le document complet.
+                </div>
+              </div>
+            ) : (
+              <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)', background:'var(--bg-glass)', borderRadius:'20px'}}>
+                Aucune écriture trouvée sur cette période.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= INVENTAIRE SECTION ================= */}
+        {activeTab === 'inventaire' && (
+          <div style={{animation:'fadeUp 0.5s ease-out'}}>
+            
+            <div className="filter-card" style={{justifyContent:'flex-start'}}>
+              <div style={{flex:2}}>
+                <h3 style={{fontSize:'18px', fontWeight:'800', marginBottom:'5px', color:'var(--text-primary)'}}>Valorisation du Stock</h3>
+                <p style={{color:'var(--text-secondary)', fontSize:'13px'}}>État actuel des stocks et valorisation estimée.</p>
+              </div>
+              <button onClick={fetchInventaire} className="btn-action btn-refresh">
+                <div style={{width:18, height:18}}><IconRefresh /></div> Actualiser
+              </button>
+              {inventaireData.length > 0 && (
+                <button onClick={printInventaire} className="btn-action btn-pdf">
+                   <div style={{width:18, height:18}}><IconPDF /></div> PDF
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)'}}>Calcul du stock...</div>
+            ) : inventaireData.length > 0 ? (
+              <div className="data-grid">
+                <div className="grid-header" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr'}}>
+                  <div>Article</div>
+                  <div style={{textAlign:'center'}}>Stock</div>
+                  <div style={{textAlign:'right'}}>Prix Unitaire</div>
+                  <div style={{textAlign:'right'}}>Valeur Totale</div>
+                </div>
+
+                {inventaireData.map((p, i) => (
+                  <div key={i} className="grid-row" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr', animationDelay: `${i * 0.03}s`}}>
+                    <div className="cell-desc" data-label="Article" style={{fontWeight:'700'}}>{p.nom}</div>
+                    <div style={{textAlign:'center'}} data-label="Quantité">
+                      <span className="cell-tag">{p.stock_actuel} {p.unite}</span>
+                    </div>
+                    <div className="cell-money" data-label="P.U." style={{fontSize:'14px', opacity:0.8}}>
+                      {p.prix_vente.toLocaleString()}
+                    </div>
+                    <div className="cell-money" data-label="Valeur" style={{color:'#10b981'}}>
+                      {(p.stock_actuel * p.prix_vente).toLocaleString()} F
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)', background:'var(--bg-glass)', borderRadius:'20px'}}>
+                Aucun stock disponible.
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
     </div>
   );

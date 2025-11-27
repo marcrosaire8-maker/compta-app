@@ -1,5 +1,4 @@
-// src/pages/PlanComptable.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
@@ -7,79 +6,54 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-/* ICÔNES */
-const IconPlus = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>;
-const IconEdit = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-const IconTrash = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18m-2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2m-6 5v6m4-6v6"/></svg>;
-const IconDownload = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7l-5 5-5-5m5-7v12"/></svg>;
-const IconClose = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 18L18 6M6 6l12 12"/></svg>;
+/* --- ICONS --- */
+const IconPlus = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>;
+const IconEdit = () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>;
+const IconTrash = () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>;
+const IconDownload = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>;
+const IconSearch = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>;
+const IconSun = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>;
+const IconMoon = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>;
 
-/* STYLES PREMIUM ROUGE */
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-  *{box-sizing:border-box}body{margin:0;font-family:'Inter',sans-serif;background:#f8fafc;color:#1e293b}
-  .page{display:flex;min-height:100vh}
-  .main{flex:1;margin-left:260px;padding:2.5rem;transition:all .4s}
-  @media(max-width:1024px){.main{margin-left:0;padding:1.5rem;padding-top:90px}}
-  .header h1{font-size:2.4rem;font-weight:900;background:linear-gradient(90deg,#dc2626,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0 0 .5rem}
-  .header p{color:#64748b;margin:0}
-  .actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem;margin-bottom:2.5rem}
-  .btn{background:#dc2626;color:white;border:none;padding:.9rem 1.8rem;border-radius:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.6rem;box-shadow:0 8px 20px rgba(220,38,38,.3);transition:.3s}
-  .btn:hover{background:#b91c1c;transform:translateY(-2px)}
-  .btn-blue{background:#3b82f6}
-  .btn-green{background:#10b981}
-  .btn-purple{background:#8b5cf6}
-  .card{background:white;border-radius:18px;border:1px solid #e2e8f0;box-shadow:0 10px 30px -8px rgba(0,0,0,.08);overflow:hidden}
-  .card-header{padding:1.5rem 2rem;background:#fef2f2;border-bottom:1px solid #fee2e2}
-  .card-header h3{margin:0;color:#991b1b;font-weight:700}
-  .search-bar{background:#fef2f2;padding:1rem;border-radius:16px;display:flex;gap:1rem;align-items:center;margin-bottom:2rem}
-  .search-input{flex:1;padding:.9rem 1.2rem;border:1px solid #fca5a5;border-radius:12px;outline:none;font-size:1rem}
-  .search-input:focus{border-color:#dc2626}
-  select{padding:.9rem 1.2rem;border:1px solid #cbd5e1;border-radius:12px;outline:none}
-  table{width:100%;border-collapse:collapse}
-  th{background:#fef2f2;padding:1rem;text-align:left;font-size:.8rem;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:1px}
-  td{padding:1rem;border-bottom:1px solid #fee2e2;color:#334155}
-  .text-right{text-align:right}
-  .badge{background:#fee2e2;color:#991b1b;padding:6px 12px;border-radius:20px;font-size:0.8rem;font-weight:700}
-  .badge-actif{background:#d1fae5;color:#166534}
-  .badge-passif{background:#bfdbfe;color:#1d4ed8}
-  .badge-charge{background:#fecaca;color:#991b1b}
-  .badge-produit{background:#fef3c7;color:#92400e}
-  .empty-state{text-align:center;padding:4rem 2rem;color:#94a3b8}
-  .empty-state h3{font-size:1.6rem;margin-bottom:1rem}
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1rem}
-  .modal{background:white;border-radius:24px;width:100%;max-width:560px;max-height:90vh;overflow:hidden;box-shadow:0 30px 80px -20px rgba(220,38,38,.4)}
-  .modal-header{padding:1.5rem 2rem;background:#fef2f2;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #fee2e2}
-  .modal-title{margin:0;font-size:1.6rem;font-weight:800;color:#991b1b}
-  .modal-body{padding:2rem}
-  .form-group{margin-bottom:1.5rem}
-  label{display:block;margin-bottom:.5rem;font-weight:600;color:#475569;font-size:.95rem}
-  input,select{padding:.9rem 1.2rem;border:1px solid #cbd5e1;border-radius:12px;font-size:1rem;width:100%;outline:none;transition:.3s}
-  input:focus,select:focus{border-color:#dc2626;box-shadow:0 0 0 4px rgba(220,38,38,.1)}
-`;
-
-export default function PlanComptable() {
+export default function PlanComptableUltimate() {
+  // --- STATES ---
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [comptes, setComptes] = useState([]);
   const [entreprise, setEntreprise] = useState(null);
+  
+  // UI States
+  const [darkMode, setDarkMode] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  
+  // Filters & Form
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClasse, setFilterClasse] = useState('all');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ code: '', libelle: '', type: 'ACTIF' });
 
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const ste = await getEntrepriseForUser(user.id, user.email);
-      if (!ste) return;
-      setEntreprise(ste);
-      fetchComptes(ste.id);
-      setLoading(false);
-    })();
-  }, []);
+  // --- EFFECTS ---
+  useEffect(() => { initData(); }, []);
+
+  const handleMouseMove = (e) => {
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    const x = (clientX / innerWidth) * 2 - 1;
+    const y = (clientY / innerHeight) * 2 - 1;
+    setMousePos({ x, y });
+  };
+
+  async function initData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const ste = await getEntrepriseForUser(user.id, user.email);
+    if (!ste) return;
+    setEntreprise(ste);
+    fetchComptes(ste.id);
+    setLoading(false);
+  }
 
   async function fetchComptes(id) {
     const { data } = await supabase
@@ -90,12 +64,13 @@ export default function PlanComptable() {
     setComptes(data || []);
   }
 
+  // --- ACTIONS ---
   async function importOHADA() {
-    if (!confirm("Importer le plan comptable OHADA complet ?\nCela ajoutera tous les comptes standards.")) return;
+    if (!confirm("Importer le plan comptable OHADA standard ?")) return;
     setImporting(true);
     try {
       const { data: modele } = await supabase.from('modele_plan_ohada').select('*');
-      if (!modele?.length) throw new Error("Modèle OHADA introuvable");
+      if (!modele?.length) throw new Error("Modèle introuvable");
 
       const toInsert = modele.map(m => ({
         entreprise_id: entreprise.id,
@@ -107,42 +82,11 @@ export default function PlanComptable() {
       const { error } = await supabase.from('plan_comptable').insert(toInsert);
       if (error) throw error;
 
-      alert("Plan OHADA importé avec succès !");
+      alert("Importation réussie !");
       fetchComptes(entreprise.id);
-    } catch (err) {
-      alert("Erreur : " + err.message);
-    } finally {
-      setImporting(false);
-    }
+    } catch (err) { alert("Erreur : " + err.message); } 
+    finally { setImporting(false); }
   }
-
-  const filtered = comptes.filter(c => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch = c.libelle.toLowerCase().includes(search) || c.code_compte.includes(searchTerm);
-    const matchesClasse = filterClasse === 'all' || c.code_compte.startsWith(filterClasse);
-    return matchesSearch && matchesClasse;
-  });
-
-  const exportExcel = () => {
-    const data = filtered.map(c => ({ Code: c.code_compte, Libellé: c.libelle, Type: c.type_compte }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Plan Comptable");
-    XLSX.writeFile(wb, `Plan_Comptable_${entreprise.nom}.xlsx`);
-  };
-
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text(`Plan Comptable - ${entreprise.nom}`, 14, 20);
-    autoTable(doc, {
-      startY: 35,
-      head: [['Code', 'Libellé', 'Type']],
-      body: filtered.map(c => [c.code_compte, c.libelle, c.type_compte]),
-      theme: 'grid'
-    });
-    doc.save(`Plan_Comptable_${entreprise.nom}.pdf`);
-  };
 
   const saveCompte = async (e) => {
     e.preventDefault();
@@ -164,155 +108,298 @@ export default function PlanComptable() {
       setEditing(null);
       setForm({ code: '', libelle: '', type: 'ACTIF' });
       fetchComptes(entreprise.id);
-    } catch (err) {
-      alert("Erreur : " + err.message);
-    }
+    } catch (err) { alert("Erreur : " + err.message); }
   };
 
   const deleteCompte = async (id) => {
-    if (!confirm("Supprimer définitivement ce compte ?")) return;
+    if (!confirm("Supprimer ce compte ?")) return;
     await supabase.from('plan_comptable').delete().eq('id', id);
     fetchComptes(entreprise.id);
   };
 
-  if (loading) return <div style={{height:'100vh',display:'grid',placeItems:'center',fontSize:'2rem'}}>Chargement…</div>;
+  // --- EXPORTS ---
+  const exportExcel = () => {
+    const data = filtered.map(c => ({ Code: c.code_compte, Libellé: c.libelle, Type: c.type_compte }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plan Comptable");
+    XLSX.writeFile(wb, `Plan_Comptable.xlsx`);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text(`Plan Comptable - ${entreprise.nom}`, 14, 20);
+    autoTable(doc, {
+      startY: 35,
+      head: [['Code', 'Libellé', 'Type']],
+      body: filtered.map(c => [c.code_compte, c.libelle, c.type_compte]),
+      theme: 'grid'
+    });
+    doc.save(`Plan_Comptable.pdf`);
+  };
+
+  // --- FILTRAGE ---
+  const filtered = comptes.filter(c => {
+    const search = searchTerm.toLowerCase();
+    const matchesSearch = c.libelle.toLowerCase().includes(search) || c.code_compte.includes(searchTerm);
+    const matchesClasse = filterClasse === 'all' || c.code_compte.startsWith(filterClasse);
+    return matchesSearch && matchesClasse;
+  });
+
+  if (loading) return <div style={{height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#000', color:'white'}}>Chargement...</div>;
 
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: styles }} />
+    <div className={`app-wrapper ${darkMode ? 'dark' : 'light'}`} onMouseMove={handleMouseMove}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-      <div className="page">
+        :root { --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+
+        .light {
+          --bg-main: #f2f2f7; --bg-glass: rgba(255, 255, 255, 0.7); --bg-card: #ffffff;
+          --text-primary: #1d1d1f; --text-secondary: #86868b; --border: rgba(0,0,0,0.06);
+          --shadow: 0 10px 40px -10px rgba(0,0,0,0.1); 
+          --primary: #ec4899; /* Pink/Magenta for Plan Comptable */
+          --primary-glow: rgba(236, 72, 153, 0.3);
+          --input-bg: #f5f5f7;
+        }
+
+        .dark {
+          --bg-main: #000000; --bg-glass: rgba(28, 28, 30, 0.7); --bg-card: #1c1c1e;
+          --text-primary: #f5f5f7; --text-secondary: #a1a1a6; --border: rgba(255,255,255,0.15);
+          --shadow: 0 20px 50px -10px rgba(0,0,0,0.6); 
+          --primary: #f472b6;
+          --primary-glow: rgba(244, 114, 182, 0.4);
+          --input-bg: #2c2c2e;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; background: var(--bg-main); transition: background 0.5s ease; }
+        .app-wrapper { min-height: 100vh; position: relative; }
+
+        /* --- PARALLAX ORBS --- */
+        .orb { position: fixed; border-radius: 50%; filter: blur(100px); z-index: 0; pointer-events: none; opacity: 0.4; }
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--primary); }
+        .orb-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #8b5cf6; } /* Purple */
+
+        /* --- SIDEBAR & OVERLAY --- */
+        .sidebar-wrapper { position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 50; transition: transform 0.3s ease; }
+        .mobile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 40; display: none; opacity: 0; transition: opacity 0.3s; }
+        main { min-height: 100vh; padding: 40px; margin-left: 260px; position: relative; z-index: 1; transition: margin-left 0.3s ease; }
+
+        /* --- HEADER --- */
+        .header-bar { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px; animation: slideDown 0.8s ease-out; }
+        .header-content h1 { font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 6px; background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%); -webkit-background-clip: text; color: transparent; }
+        .actions { display: flex; gap: 12px; align-items: center; }
+
+        .btn-menu-mobile { display: none; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 24px; padding: 8px 12px; border-radius: 12px; cursor: pointer; }
+        .btn-theme { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: var(--transition); box-shadow: var(--shadow); color: var(--text-primary); }
+        .btn-theme:hover { transform: scale(1.1); }
+
+        .btn-primary { padding: 14px 24px; border-radius: 99px; border: none; background: linear-gradient(135deg, var(--primary), #db2777); color: white; font-weight: 600; font-size: 15px; cursor: pointer; box-shadow: 0 8px 20px var(--primary-glow); transition: var(--transition); display: flex; align-items: center; gap: 8px; }
+        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 15px 30px var(--primary-glow); }
+        .btn-glass { padding: 12px 20px; border-radius: 14px; border: 1px solid var(--border); background: var(--bg-glass); color: var(--text-primary); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.3s; }
+        .btn-glass:hover { background: var(--bg-card); transform: translateY(-2px); }
+
+        /* --- SEARCH & FILTERS --- */
+        .search-container { display: flex; gap: 16px; margin-bottom: 30px; animation: fadeIn 1s ease 0.2s backwards; max-width: 800px; }
+        .search-bar { flex: 1; position: relative; }
+        .search-input { width: 100%; padding: 16px 20px 16px 50px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-size: 16px; outline: none; box-shadow: var(--shadow); transition: 0.3s; }
+        .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-glow); }
+        .search-icon { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
+        .filter-select { padding: 0 20px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); outline: none; font-weight: 600; cursor: pointer; }
+
+        /* --- LIST COMPTES --- */
+        .accounts-list { display: flex; flex-direction: column; gap: 12px; }
+        
+        /* Header Row */
+        .list-header { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 20px; padding: 0 24px; margin-bottom: 5px; color: var(--text-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+
+        .account-card {
+          display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 20px; align-items: center;
+          background: var(--bg-glass); backdrop-filter: blur(20px); border: 1px solid var(--border);
+          border-radius: 18px; padding: 16px 24px; transition: var(--transition);
+          animation: fadeSlide 0.5s ease-out backwards;
+        }
+        .account-card:hover { transform: scale(1.01); background: var(--bg-card); border-color: var(--primary); z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+
+        .cell-code { font-family: monospace; font-weight: 700; font-size: 16px; color: var(--primary); letter-spacing: 1px; }
+        .cell-name { font-weight: 600; color: var(--text-primary); font-size: 15px; }
+        
+        .badge { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; width: fit-content; }
+        .badge-ACTIF { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+        .badge-PASSIF { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .badge-CHARGE { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+        .badge-PRODUIT { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+
+        .actions-cell { display: flex; gap: 8px; justify-content: flex-end; }
+        .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.1); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .btn-icon:hover { background: var(--text-primary); color: var(--bg-main); }
+
+        /* --- EMPTY STATE (IMPORT) --- */
+        .empty-state { text-align: center; padding: 60px; background: var(--bg-glass); border-radius: 24px; border: 1px dashed var(--border); margin-top: 20px; }
+        .empty-title { font-size: 24px; font-weight: 800; color: var(--text-primary); margin-bottom: 10px; }
+        .empty-desc { color: var(--text-secondary); margin-bottom: 30px; }
+
+        /* --- MODAL --- */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+        .modal-card { width: 100%; max-width: 500px; background: var(--bg-card); padding: 40px; border-radius: 32px; box-shadow: 0 30px 80px rgba(0,0,0,0.4); border: 1px solid var(--border); animation: zoomIn 0.3s ease-out; }
+        .modal-title { font-size: 26px; font-weight: 800; margin-bottom: 30px; color: var(--text-primary); }
+
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .form-input { width: 100%; padding: 16px; border-radius: 16px; border: 1px solid transparent; background: var(--input-bg); color: var(--text-primary); font-size: 16px; outline: none; transition: 0.3s; }
+        .form-input:focus { border-color: var(--primary); background: var(--bg-card); box-shadow: 0 0 0 4px var(--primary-glow); }
+
+        /* --- MEDIA QUERIES --- */
+        @media (max-width: 1024px) {
+          .sidebar-wrapper { transform: translateX(-100%); }
+          .sidebar-wrapper.open { transform: translateX(0); }
+          .mobile-overlay.open { display: block; opacity: 1; }
+          main { margin-left: 0; padding: 20px; width: 100%; }
+          .btn-menu-mobile { display: block; }
+        }
+
+        @media (max-width: 768px) {
+          .header-bar { flex-direction: column; align-items: flex-start; gap: 15px; }
+          .actions { width: 100%; justify-content: space-between; }
+          .search-container { flex-direction: column; }
+          
+          /* Card Transformation */
+          .list-header { display: none; }
+          .account-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; position: relative; }
+          .cell-code { font-size: 20px; }
+          .cell-name { font-size: 16px; }
+          .actions-cell { width: 100%; justify-content: flex-end; margin-top: 10px; }
+        }
+
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeSlide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+      `}</style>
+
+      {/* OVERLAY & SIDEBAR */}
+      <div className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`} onClick={() => setIsMobileMenuOpen(false)}></div>
+      <div className={`sidebar-wrapper ${isMobileMenuOpen ? 'open' : ''}`}>
         <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
+      </div>
 
-        <div className="main">
-          <div className="actions">
-            <div className="header">
+      {/* PARALLAX ORBS */}
+      <div className="orb orb-1" style={{ transform: `translate(${mousePos.x * 20}px, ${mousePos.y * 20}px)` }}></div>
+      <div className="orb orb-2" style={{ transform: `translate(${mousePos.x * -20}px, ${mousePos.y * -20}px)` }}></div>
+
+      <main>
+        {/* HEADER */}
+        <div className="header-bar">
+          <div style={{display:'flex', alignItems:'center', gap:'15px', width:'100%'}}>
+            <button className="btn-menu-mobile" onClick={() => setIsMobileMenuOpen(true)}>☰</button>
+            <div className="header-content">
               <h1>Plan Comptable</h1>
-              <p>Gestion complète des comptes OHADA</p>
-            </div>
-            <div style={{display:'flex',gap:'1rem',flexWrap:'wrap'}}>
-              <button onClick={() => { setEditing(null); setForm({code:'',libelle:'',type:'ACTIF'}); setOpen(true); }} className="btn btn-blue">
-                <IconPlus /> Ajouter un compte
-              </button>
-              <button onClick={exportPDF} className="btn" style={{background:'#ef4444'}}>
-                <IconDownload /> PDF
-              </button>
-              <button onClick={exportExcel} className="btn btn-green">
-                <IconDownload /> Excel
-              </button>
+              <div style={{color:'var(--text-secondary)'}}>Codification OHADA</div>
             </div>
           </div>
-
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="Rechercher un compte..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="search-input"
-            />
-            <select value={filterClasse} onChange={e => setFilterClasse(e.target.value)}>
-              <option value="all">Toutes les classes</option>
-              {[1,2,3,4,5,6,7].map(n => (
-                <option key={n} value={n}>Classe {n}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="card">
-            {comptes.length === 0 ? (
-              <div className="empty-state">
-                <h3>Aucun compte configuré</h3>
-                <p>Importez le plan comptable OHADA en un clic !</p>
-                <button onClick={importOHADA} disabled={importing} className="btn btn-purple" style={{fontSize:'1.2rem',padding:'1rem 2rem'}}>
-                  {importing ? 'Installation en cours...' : 'Installer le Plan OHADA Complet'}
-                </button>
-              </div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Libellé</th>
-                    <th>Type</th>
-                    <th className="text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(c => (
-                    <tr key={c.id}>
-                      <td style={{fontWeight:700,color:'#1e293b'}}>{c.code_compte}</td>
-                      <td>{c.libelle}</td>
-                      <td>
-                        <span className={`badge ${
-                          c.type_compte === 'ACTIF' ? 'badge-actif' :
-                          c.type_compte === 'PASSIF' ? 'badge-passif' :
-                          c.type_compte === 'CHARGE' ? 'badge-charge' :
-                          'badge-produit'
-                        }`}>
-                          {c.type_compte}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        <button onClick={() => { setEditing(c); setForm({code:c.code_compte, libelle:c.libelle, type:c.type_compte}); setOpen(true); }}
-                          style={{background:'none',border:'none',cursor:'pointer',marginRight:12}}>
-                          <IconEdit />
-                        </button>
-                        <button onClick={() => deleteCompte(c.id)}
-                          style={{background:'none',border:'none',cursor:'pointer',color:'#ef4444'}}>
-                          <IconTrash />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+          <div className="actions">
+            <button className="btn-theme" onClick={() => setDarkMode(!darkMode)}>
+              {darkMode ? <IconSun/> : <IconMoon/>}
+            </button>
+            <button className="btn-glass" onClick={exportExcel}><IconDownload /> Excel</button>
+            <button className="btn-glass" onClick={exportPDF}><IconDownload /> PDF</button>
+            <button className="btn-primary" onClick={() => { setEditing(null); setForm({code:'',libelle:'',type:'ACTIF'}); setOpen(true); }}>
+              <IconPlus /> Ajouter
+            </button>
           </div>
         </div>
-      </div>
+
+        {/* SEARCH */}
+        <div className="search-container">
+          <div className="search-bar">
+            <div className="search-icon"><IconSearch /></div>
+            <input 
+              type="text" 
+              placeholder="Rechercher un compte (ex: 411, Client...)" 
+              value={searchTerm} 
+              onChange={e => setSearchTerm(e.target.value)} 
+              className="search-input"
+            />
+          </div>
+          <select className="filter-select" value={filterClasse} onChange={e => setFilterClasse(e.target.value)}>
+            <option value="all">Toutes Classes</option>
+            {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>Classe {n}</option>)}
+          </select>
+        </div>
+
+        {/* CONTENT */}
+        <div className="accounts-list">
+          {comptes.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-title">Plan Comptable Vide</div>
+              <p className="empty-desc">Votre plan comptable n'est pas encore configuré.</p>
+              <button className="btn-primary" onClick={importOHADA} disabled={importing}>
+                {importing ? 'Installation...' : 'Importer le standard OHADA'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="list-header">
+                <div>Code</div>
+                <div>Intitulé</div>
+                <div>Type</div>
+                <div style={{textAlign:'right'}}>Actions</div>
+              </div>
+              
+              {filtered.map((c, i) => (
+                <div key={c.id} className="account-card" style={{animationDelay: `${i * 0.02}s`}}>
+                  <div className="cell-code">{c.code_compte}</div>
+                  <div className="cell-name">{c.libelle}</div>
+                  <div>
+                    <span className={`badge badge-${c.type_compte}`}>{c.type_compte}</span>
+                  </div>
+                  <div className="actions-cell">
+                    <button className="btn-icon" onClick={() => { setEditing(c); setForm({code:c.code_compte, libelle:c.libelle, type:c.type_compte}); setOpen(true); }}>
+                      <IconEdit />
+                    </button>
+                    <button className="btn-icon" onClick={() => deleteCompte(c.id)}>
+                      <IconTrash />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </main>
 
       {/* MODAL */}
       {open && (
         <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">
-                {editing ? 'Modifier le compte' : 'Nouveau compte'}
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h2 className="modal-title">{editing ? 'Modifier Compte' : 'Nouveau Compte'}</h2>
+            <form onSubmit={saveCompte}>
+              <div className="form-group">
+                <label className="form-label">Code Compte</label>
+                <input className="form-input" value={form.code} onChange={e => setForm({...form, code: e.target.value})} required placeholder="ex: 601100" />
               </div>
-              <button onClick={() => setOpen(false)} style={{background:'none',border:'none',cursor:'pointer'}}>
-                <IconClose />
-              </button>
-            </div>
-            <div className="modal-body">
-              <form onSubmit={saveCompte}>
-                <div className="form-group">
-                  <label>Code compte</label>
-                  <input type="text" required value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="Ex: 601000" />
-                </div>
-                <div className="form-group">
-                  <label>Libellé</label>
-                  <input type="text" required value={form.libelle} onChange={e => setForm({...form, libelle: e.target.value})} placeholder="Ex: Achats de marchandises" />
-                </div>
-                <div className="form-group">
-                  <label>Type de compte</label>
-                  <select value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
-                    <option value="ACTIF">ACTIF</option>
-                    <option value="PASSIF">PASSIF</option>
-                    <option value="CHARGE">CHARGE</option>
-                    <option value="PRODUIT">PRODUIT</option>
-                  </select>
-                </div>
-                <div style={{marginTop:'2rem',textAlign:'right'}}>
-                  <button type="submit" className="btn">
-                    {editing ? 'Mettre à jour' : 'Créer le compte'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="form-group">
+                <label className="form-label">Libellé</label>
+                <input className="form-input" value={form.libelle} onChange={e => setForm({...form, libelle: e.target.value})} required placeholder="ex: Achat Marchandises" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Type</label>
+                <select className="form-input" value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
+                  <option value="ACTIF">ACTIF</option>
+                  <option value="PASSIF">PASSIF</option>
+                  <option value="CHARGE">CHARGE</option>
+                  <option value="PRODUIT">PRODUIT</option>
+                </select>
+              </div>
+              <div style={{display:'flex', justifyContent:'flex-end', gap:'15px', marginTop:'30px'}}>
+                <button type="button" onClick={() => setOpen(false)} style={{padding:'14px 28px', borderRadius:'12px', border:'none', background:'var(--input-bg)', color:'var(--text-primary)', fontWeight:'600', cursor:'pointer'}}>Annuler</button>
+                <button type="submit" className="btn-primary">Enregistrer</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
