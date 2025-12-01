@@ -4,41 +4,164 @@ import { getEntrepriseForUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { motion, AnimatePresence } from 'framer-motion';
 
-/* --- ICÔNES --- */
-const IconBook = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>;
-const IconBox = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>;
-const IconSearch = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>;
-const IconPDF = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>;
-const IconRefresh = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{width:'100%',height:'100%'}}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>;
+/* --- ICÔNES (Légèrement retouchées pour l'animation) --- */
+const IconBook = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>;
+const IconBox = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>;
+const IconSearch = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>;
+const IconPDF = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>;
+const IconRefresh = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>;
+const IconMoon = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>;
+const IconSun = () => <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="100%" height="100%"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>;
 
-export default function EditionsUltimate() {
-  // --- STATES ---
+/* --- STYLES CSS & THEME --- */
+// On utilise des variables CSS pour une bascule Dark Mode instantanée
+const styles = `
+  @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=Inter:wght@300;400;600&display=swap');
+
+  :root {
+    --bg-primary: #F5F5F7;
+    --bg-secondary: #FFFFFF;
+    --text-primary: #1D1D1F;
+    --text-secondary: #86868B;
+    --accent: #0066CC;
+    --accent-glow: rgba(0, 102, 204, 0.3);
+    --border: #D2D2D7;
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.5);
+    --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.05);
+    --shadow-hover: 0 20px 50px -12px rgba(0,0,0,0.12);
+  }
+
+  [data-theme='dark'] {
+    --bg-primary: #000000;
+    --bg-secondary: #1C1C1E;
+    --text-primary: #F5F5F7;
+    --text-secondary: #A1A1A6;
+    --accent: #2997FF;
+    --accent-glow: rgba(41, 151, 255, 0.3);
+    --border: #38383A;
+    --glass-bg: rgba(28, 28, 30, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.5);
+    --shadow-hover: 0 20px 50px -12px rgba(0,0,0,0.7);
+  }
+
+  body {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), color 0.5s ease;
+    overflow-x: hidden;
+  }
+
+  /* FLOU D'ARRIÈRE PLAN (Glassmorphism) */
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid var(--glass-border);
+  }
+
+  /* LAYOUT */
+  .layout { display: flex; min-height: 100vh; }
+  
+  .main-area {
+    margin-left: 260px;
+    padding: 3rem;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+  }
+  
+  @media (max-width: 900px) {
+    .main-area { margin-left: 0; padding: 1.5rem; }
+  }
+
+  /* TYPOGRAPHY */
+  h1 { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  p.subtitle { color: var(--text-secondary); font-size: 1.1rem; font-weight: 400; }
+
+  /* INPUTS DESIGN */
+  .custom-input {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    width: 100%;
+    transition: all 0.3s ease;
+  }
+  .custom-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-glow);
+  }
+
+  /* BUTTONS */
+  .btn-modern {
+    padding: 0.8rem 1.5rem;
+    border-radius: 99px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+  
+  /* TABLE STYLES */
+  .modern-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+  .modern-table th { 
+    text-align: left; padding: 1rem; color: var(--text-secondary); 
+    font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; 
+  }
+  .modern-table td { 
+    padding: 1.25rem 1rem; background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    first-child: { border-left: 1px solid var(--border); border-top-left-radius: 16px; border-bottom-left-radius: 16px; }
+  }
+  /* L'astuce pour arrondir les rangées du tableau */
+  .modern-table tr td:first-child { border-top-left-radius: 12px; border-bottom-left-radius: 12px; border-left: 1px solid var(--border); }
+  .modern-table tr td:last-child { border-top-right-radius: 12px; border-bottom-right-radius: 12px; border-right: 1px solid var(--border); }
+
+  /* RESPONSIVE TABLE */
+  @media (max-width: 900px) {
+    .modern-table thead { display: none; }
+    .modern-table tr { display: flex; flex-direction: column; margin-bottom: 1rem; background: var(--bg-secondary); padding: 1rem; border-radius: 16px; border: 1px solid var(--border); }
+    .modern-table td { display: flex; justify-content: space-between; border: none; padding: 0.5rem 0; background: transparent; }
+    .modern-table td::before { content: attr(data-label); color: var(--text-secondary); font-weight: 600; }
+  }
+`;
+
+export default function Editions() {
   const [loading, setLoading] = useState(true);
   const [entreprise, setEntreprise] = useState(null);
   const [activeTab, setActiveTab] = useState('journal');
+  const [theme, setTheme] = useState('light');
   
-  // UI States
-  const [darkMode, setDarkMode] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  // Filters & Data
+  // Filtres
   const [dateDebut, setDateDebut] = useState(`${new Date().getFullYear()}-01-01`);
   const [dateFin, setDateFin] = useState(`${new Date().getFullYear()}-12-31`);
+
+  // Données
   const [journalData, setJournalData] = useState([]);
   const [inventaireData, setInventaireData] = useState([]);
 
   useEffect(() => { initData(); }, []);
 
-  // Parallaxe Effect
-  const handleMouseMove = (e) => {
-    const { clientX, clientY } = e;
-    const { innerWidth, innerHeight } = window;
-    const x = (clientX / innerWidth) * 2 - 1;
-    const y = (clientY / innerHeight) * 2 - 1;
-    setMousePos({ x, y });
-  };
+  // Application du thème au body
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   async function initData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -48,9 +171,7 @@ export default function EditionsUltimate() {
     setLoading(false);
   }
 
-  // --- LOGIC (JOURNAL & INVENTAIRE) ---
   async function fetchJournal() {
-    // Petit délai artificiel pour montrer l'animation de chargement si c'est trop rapide
     setLoading(true);
     const { data, error } = await supabase
       .from('lignes_ecriture')
@@ -79,36 +200,19 @@ export default function EditionsUltimate() {
     setLoading(false);
   }
 
+  // --- Fonctions PDF (Identiques) ---
   const printLivreJournal = () => {
     const doc = new jsPDF();
-    doc.setFontSize(18); doc.text(`LIVRE-JOURNAL`, 14, 20);
+    doc.text(`LIVRE-JOURNAL`, 14, 20);
     doc.setFontSize(10); doc.text(`Période : ${dateDebut} au ${dateFin}`, 14, 28);
-
-    const rows = journalData.map(L => [
-      new Date(L.ecriture.date_ecriture).toLocaleDateString(),
-      L.ecriture.numero_piece?.toString().substring(0, 8),
-      L.compte.code_compte,
-      L.compte.libelle,
-      L.ecriture.libelle,
-      L.debit > 0 ? L.debit.toLocaleString() : '',
-      L.credit > 0 ? L.credit.toLocaleString() : ''
-    ]);
-
-    autoTable(doc, {
-      startY: 35,
-      head: [['Date', 'Ref', 'Cpt', 'Compte', 'Libellé', 'Débit', 'Crédit']],
-      body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] }
-    });
+    const rows = journalData.map(L => [L.ecriture.date_ecriture, L.ecriture.numero_piece?.toString().substring(0, 8), L.compte.code_compte, L.compte.libelle, L.ecriture.libelle, L.debit > 0 ? L.debit.toLocaleString() : '', L.credit > 0 ? L.credit.toLocaleString() : '']);
+    autoTable(doc, { startY: 35, head: [['Date', 'Ref', 'Cpt', 'Compte', 'Libellé', 'Débit', 'Crédit']], body: rows });
     doc.save('livre_journal.pdf');
   };
 
   const printInventaire = () => {
     const doc = new jsPDF();
-    doc.setFontSize(18); doc.text(`LIVRE D'INVENTAIRE`, 14, 20);
-    doc.setFontSize(10); doc.text(`Arrêté au : ${new Date().toLocaleDateString()}`, 14, 28);
-
+    doc.text(`LIVRE D'INVENTAIRE`, 14, 20);
     let totalValeur = 0;
     const rows = inventaireData.map(p => {
       const valeur = p.stock_actuel * p.prix_vente;
@@ -116,368 +220,205 @@ export default function EditionsUltimate() {
       return [p.nom, `${p.stock_actuel} ${p.unite}`, p.prix_vente.toLocaleString(), valeur.toLocaleString()];
     });
     rows.push(['TOTAL', '', '', totalValeur.toLocaleString()]);
-
-    autoTable(doc, {
-      startY: 35,
-      head: [['Désignation', 'Qté', 'PU (Est.)', 'Valeur']],
-      body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129] }
-    });
+    autoTable(doc, { startY: 35, head: [['Désignation', 'Qté', 'PU (Est.)', 'Valeur']], body: rows });
     doc.save('livre_inventaire.pdf');
   };
 
+  // --- VARIANTS D'ANIMATION (FRAMER MOTION) ---
+  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } };
+
+  if (loading) return <div style={{height:'100vh', display:'grid', placeItems:'center', background:'var(--bg-primary)', color:'var(--text-primary)'}}>Chargement...</div>;
+
   return (
-    <div className={`app-wrapper ${darkMode ? 'dark' : 'light'}`} onMouseMove={handleMouseMove}>
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    <div className="layout">
+      <style>{styles}</style>
+      <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
 
-        :root {
-          --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-        }
+      <main className="main-area">
+        {/* Éléments de fond décoratifs (Paralax/Glow) */}
+        <div style={{position:'fixed', top:'-10%', right:'-10%', width:'600px', height:'600px', background:'radial-gradient(circle, var(--accent) 0%, transparent 70%)', opacity:0.1, filter:'blur(80px)', zIndex:-1, pointerEvents:'none'}}></div>
+        <div style={{position:'fixed', bottom:'-10%', left:'-10%', width:'500px', height:'500px', background:'radial-gradient(circle, #8b5cf6 0%, transparent 70%)', opacity:0.1, filter:'blur(80px)', zIndex:-1, pointerEvents:'none'}}></div>
 
-        .light {
-          --bg-main: #f2f2f7;
-          --bg-glass: rgba(255, 255, 255, 0.65);
-          --bg-card: #ffffff;
-          --text-primary: #1d1d1f;
-          --text-secondary: #86868b;
-          --border: rgba(0,0,0,0.06);
-          --shadow: 0 10px 40px -10px rgba(0,0,0,0.1);
-          --accent: #4f46e5;
-          --accent-glow: rgba(79, 70, 229, 0.3);
-          --input-bg: #f5f5f7;
-        }
-
-        .dark {
-          --bg-main: #000000;
-          --bg-glass: rgba(28, 28, 30, 0.65);
-          --bg-card: #1c1c1e;
-          --text-primary: #f5f5f7;
-          --text-secondary: #a1a1a6;
-          --border: rgba(255,255,255,0.15);
-          --shadow: 0 20px 50px -10px rgba(0,0,0,0.6);
-          --accent: #6366f1;
-          --accent-glow: rgba(99, 102, 241, 0.4);
-          --input-bg: #2c2c2e;
-        }
-
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family: 'Inter', sans-serif; overflow-x: hidden; background: var(--bg-main); transition: background 0.5s ease; }
-
-        .app-wrapper { min-height: 100vh; position: relative; }
-
-        /* --- BACKGROUND ORBS --- */
-        .orb {
-          position: fixed; border-radius: 50%; filter: blur(120px); z-index: 0; pointer-events: none; opacity: 0.4;
-        }
-        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--accent); }
-        .orb-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #ec4899; } /* Pink/Magenta */
-
-        /* --- SIDEBAR & OVERLAY --- */
-        .sidebar-wrapper {
-          position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 50;
-          transition: transform 0.3s ease;
-        }
-        .mobile-overlay {
-          position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 40;
-          display: none; opacity: 0; transition: opacity 0.3s;
-        }
-
-        /* --- MAIN LAYOUT --- */
-        main {
-          min-height: 100vh;
-          padding: 40px;
-          margin-left: 260px;
-          position: relative; 
-          z-index: 1;
-          transition: margin-left 0.3s ease;
-        }
-
-        /* --- HEADER --- */
-        .header-bar {
-          display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;
-          animation: slideDown 0.8s ease-out;
-        }
-        .header-content h1 {
-          font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 6px;
-          background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
-          -webkit-background-clip: text; color: transparent;
-        }
-        .actions { display: flex; gap: 12px; align-items: center; }
-
-        .btn-menu-mobile {
-          display: none; background: var(--bg-card); border: 1px solid var(--border); 
-          color: var(--text-primary); font-size: 24px; padding: 8px 12px; 
-          border-radius: 12px; cursor: pointer;
-        }
-
-        .btn-theme {
-          width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border);
-          background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center;
-          font-size: 20px; transition: var(--transition); box-shadow: var(--shadow);
-        }
-        .btn-theme:hover { transform: scale(1.1); }
-
-        /* --- TABS SEGMENTED CONTROL --- */
-        .tabs-container {
-          background: var(--bg-glass);
-          padding: 6px; border-radius: 16px;
-          display: flex; gap: 8px; width: fit-content; margin: 0 auto 40px;
-          border: 1px solid var(--border);
-          box-shadow: var(--shadow);
-          animation: fadeUp 0.5s ease-out;
-        }
-        .tab-btn {
-          padding: 10px 24px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer;
-          display: flex; align-items: center; gap: 8px; transition: 0.3s;
-          background: transparent; color: var(--text-secondary);
-        }
-        .tab-btn.active {
-          background: var(--bg-card); color: var(--text-primary);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-        .tab-btn:hover:not(.active) { color: var(--text-primary); background: rgba(255,255,255,0.05); }
-
-        /* --- FILTER CARD --- */
-        .filter-card {
-          background: var(--bg-glass); backdrop-filter: blur(20px);
-          border: 1px solid var(--border); border-radius: 20px;
-          padding: 24px; margin-bottom: 30px;
-          display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;
-          animation: zoomIn 0.4s ease-out;
-        }
-        .input-group { flex: 1; min-width: 150px; }
-        .input-group label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
-        .input-field {
-          width: 100%; padding: 14px; border-radius: 12px; border: 1px solid transparent;
-          background: var(--input-bg); color: var(--text-primary); outline: none; transition: 0.3s;
-        }
-        .input-field:focus { border-color: var(--accent); background: var(--bg-card); }
-
-        .btn-action {
-          padding: 14px 28px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer;
-          display: flex; align-items: center; gap: 8px; transition: 0.3s; flex: 1; justify-content: center;
-        }
-        .btn-search { background: var(--text-primary); color: var(--bg-main); }
-        .btn-pdf { background: #ef4444; color: white; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3); }
-        .btn-refresh { background: var(--accent); color: white; box-shadow: 0 8px 20px var(--accent-glow); }
-        .btn-action:hover { transform: translateY(-2px); opacity: 0.9; }
-
-        /* --- GRID TABLE (JOURNAL/INVENTAIRE) --- */
-        .data-grid { display: flex; flex-direction: column; gap: 12px; }
-        
-        /* Headers differ based on content, defined in JSX */
-        .grid-header {
-          display: grid; gap: 16px; padding: 0 24px; margin-bottom: 5px;
-          color: var(--text-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase;
-        }
-        
-        .grid-row {
-          display: grid; gap: 16px; align-items: center;
-          background: var(--bg-glass); backdrop-filter: blur(20px);
-          border: 1px solid var(--border); border-radius: 18px;
-          padding: 16px 24px; transition: 0.3s;
-          animation: fadeSlide 0.4s ease-out backwards;
-        }
-        .grid-row:hover {
-          transform: scale(1.01); background: var(--bg-card);
-          border-color: var(--accent); z-index: 2;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-        }
-
-        .cell-main { font-weight: 700; color: var(--accent); font-size: 14px; font-family: 'Monaco', monospace; }
-        .cell-desc { font-weight: 500; color: var(--text-primary); font-size: 14px; }
-        .cell-date { font-size: 13px; color: var(--text-secondary); }
-        .cell-money { font-weight: 700; color: var(--text-primary); text-align: right; }
-        .cell-tag { 
-          background: rgba(79, 70, 229, 0.1); color: var(--accent); 
-          padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; width: fit-content;
-        }
-
-        /* --- MEDIA QUERIES --- */
-        @media (max-width: 1024px) {
-          .sidebar-wrapper { transform: translateX(-100%); }
-          .sidebar-wrapper.open { transform: translateX(0); }
-          .mobile-overlay.open { display: block; opacity: 1; }
-          main { margin-left: 0; padding: 20px; width: 100%; }
-          .btn-menu-mobile { display: block; }
-        }
-
-        @media (max-width: 768px) {
-          .header-bar { flex-direction: column; align-items: flex-start; }
-          .actions { width: 100%; justify-content: space-between; }
+        <motion.div 
+          initial="hidden" 
+          animate="visible" 
+          variants={containerVariants}
+          style={{ maxWidth: '1100px', margin: '0 auto', display:'flex', flexDirection:'column', gap:'2rem' }}
+        >
           
-          .grid-header { display: none; }
-          .grid-row { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; }
-          
-          .grid-row div { width: 100%; display: flex; justify-content: space-between; }
-          .grid-row div::before { content: attr(data-label); color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; }
-          
-          .cell-money { text-align: right; font-size: 16px; color: #10b981; } /* Highlight money on mobile */
-        }
-
-        /* --- ANIMATIONS --- */
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeSlide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-      `}</style>
-
-      {/* OVERLAY & SIDEBAR */}
-      <div className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`} onClick={() => setIsMobileMenuOpen(false)}></div>
-      <div className={`sidebar-wrapper ${isMobileMenuOpen ? 'open' : ''}`}>
-        <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
-      </div>
-
-      {/* PARALLAX ORBS */}
-      <div className="orb orb-1" style={{ transform: `translate(${mousePos.x * 20}px, ${mousePos.y * 20}px)` }}></div>
-      <div className="orb orb-2" style={{ transform: `translate(${mousePos.x * -20}px, ${mousePos.y * -20}px)` }}></div>
-
-      <main>
-        {/* HEADER */}
-        <div className="header-bar">
-          <div style={{display:'flex', alignItems:'center', gap:'15px', width:'100%'}}>
-            <button className="btn-menu-mobile" onClick={() => setIsMobileMenuOpen(true)}>☰</button>
-            <div className="header-content">
+          {/* HEADER AVEC ANIMATION */}
+          <motion.div variants={itemVariants} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
               <h1>Éditions Légales</h1>
-              <div style={{color:'var(--text-secondary)'}}>Documents comptables officiels</div>
+              <p className="subtitle">Générez et visualisez vos documents comptables obligatoires.</p>
             </div>
-          </div>
-          <div className="actions">
-            <button className="btn-theme" onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
-          </div>
-        </div>
+            <motion.button 
+              whileHover={{ scale: 1.1, rotate: 180 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={toggleTheme}
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', padding: '10px', borderRadius: '50%', cursor: 'pointer', color: 'var(--text-primary)', width:48, height:48 }}
+            >
+              {theme === 'light' ? <IconMoon /> : <IconSun />}
+            </motion.button>
+          </motion.div>
 
-        {/* TABS SWITCHER */}
-        <div className="tabs-container">
-          <button onClick={() => setActiveTab('journal')} className={`tab-btn ${activeTab === 'journal' ? 'active' : ''}`}>
-            <div style={{width:18, height:18}}><IconBook /></div> Livre-Journal
-          </button>
-          <button onClick={() => setActiveTab('inventaire')} className={`tab-btn ${activeTab === 'inventaire' ? 'active' : ''}`}>
-            <div style={{width:18, height:18}}><IconBox /></div> Inventaire
-          </button>
-        </div>
+          {/* ONGLETS "APPLE STYLE" (SEGMENTED CONTROL) */}
+          <motion.div variants={itemVariants} style={{ alignSelf: 'center', background: 'var(--bg-secondary)', padding: '6px', borderRadius: '16px', display: 'flex', gap: '8px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)', border: '1px solid var(--border)' }}>
+            {['journal', 'inventaire'].map(tab => (
+              <motion.button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  position: 'relative',
+                  padding: '10px 24px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  cursor: 'pointer',
+                  zIndex: 2,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  textTransform: 'capitalize'
+                }}
+              >
+                {activeTab === tab && (
+                  <motion.div
+                    layoutId="activeTab"
+                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg-primary)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: -1 }}
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <div style={{width:18, height:18}}>{tab === 'journal' ? <IconBook/> : <IconBox/>}</div>
+                {tab === 'journal' ? 'Livre-Journal' : 'Inventaire'}
+              </motion.button>
+            ))}
+          </motion.div>
 
-        {/* ================= JOURNAL SECTION ================= */}
-        {activeTab === 'journal' && (
-          <div style={{animation:'fadeUp 0.5s ease-out'}}>
-            
-            {/* FILTERS CARD */}
-            <div className="filter-card">
-              <div className="input-group">
-                <label>Date Début</label>
-                <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="input-field" />
-              </div>
-              <div className="input-group">
-                <label>Date Fin</label>
-                <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="input-field" />
-              </div>
-              <button onClick={fetchJournal} className="btn-action btn-search">
-                <div style={{width:18, height:18}}><IconSearch /></div> Rechercher
-              </button>
-              {journalData.length > 0 && (
-                <button onClick={printLivreJournal} className="btn-action btn-pdf">
-                  <div style={{width:18, height:18}}><IconPDF /></div> PDF
-                </button>
-              )}
-            </div>
-
-            {loading ? (
-               <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)'}}>Chargement des écritures...</div>
-            ) : journalData.length > 0 ? (
-              <div className="data-grid">
-                {/* Header PC */}
-                <div className="grid-header" style={{gridTemplateColumns: '1fr 0.8fr 1.5fr 2fr 1fr 1fr'}}>
-                  <div>Date</div>
-                  <div>Compte</div>
-                  <div>Libellé du Compte</div>
-                  <div>Libellé Écriture</div>
-                  <div style={{textAlign:'right'}}>Débit</div>
-                  <div style={{textAlign:'right'}}>Crédit</div>
-                </div>
-
-                {/* Rows */}
-                {journalData.slice(0, 100).map((L, i) => (
-                  <div key={i} className="grid-row" style={{gridTemplateColumns: '1fr 0.8fr 1.5fr 2fr 1fr 1fr', animationDelay: `${i * 0.02}s`}}>
-                    <div className="cell-date" data-label="Date">{new Date(L.ecriture.date_ecriture).toLocaleDateString()}</div>
-                    <div className="cell-main" data-label="Compte">{L.compte.code_compte}</div>
-                    <div className="cell-desc" data-label="Intitulé Cpt" style={{fontSize:'13px', opacity:0.8}}>{L.compte.libelle}</div>
-                    <div className="cell-desc" data-label="Libellé" style={{fontStyle:'italic'}}>{L.ecriture.libelle}</div>
-                    <div className="cell-money" data-label="Débit" style={{color: L.debit > 0 ? 'var(--text-primary)' : 'transparent'}}>
-                      {L.debit > 0 ? L.debit.toLocaleString() : '-'}
-                    </div>
-                    <div className="cell-money" data-label="Crédit" style={{color: L.credit > 0 ? 'var(--text-primary)' : 'transparent'}}>
-                      {L.credit > 0 ? L.credit.toLocaleString() : '-'}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              style={{ width: '100%' }}
+            >
+              {activeTab === 'journal' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  
+                  {/* CONTROLS CARD (GLASSMORPHISM) */}
+                  <div className="glass-panel" style={{ padding: '2rem', borderRadius: '24px', display:'flex', flexDirection:'column', gap:'1.5rem', boxShadow:'var(--shadow-soft)' }}>
+                    <div style={{ display:'flex', gap:'1rem', flexWrap:'wrap', alignItems:'flex-end' }}>
+                      <div style={{ flex:1, minWidth:'200px' }}>
+                        <label style={{display:'block', marginBottom:8, fontSize:'0.85rem', fontWeight:600, color:'var(--text-secondary)'}}>Date Début</label>
+                        <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="custom-input" />
+                      </div>
+                      <div style={{ flex:1, minWidth:'200px' }}>
+                        <label style={{display:'block', marginBottom:8, fontSize:'0.85rem', fontWeight:600, color:'var(--text-secondary)'}}>Date Fin</label>
+                        <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="custom-input" />
+                      </div>
+                      <motion.button 
+                        whileHover={{ scale: 1.02, boxShadow: 'var(--shadow-hover)' }} whileTap={{ scale: 0.98 }}
+                        onClick={fetchJournal} 
+                        className="btn-modern" 
+                        style={{ background: 'var(--accent)', color: 'white', height:'46px' }}
+                      >
+                         <div style={{width:18, height:18}}><IconSearch/></div> Rechercher
+                      </motion.button>
+                      
+                      {journalData.length > 0 && (
+                        <motion.button 
+                           whileHover={{ scale: 1.02, boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.4)' }} whileTap={{ scale: 0.98 }}
+                           onClick={printLivreJournal} 
+                           className="btn-modern" 
+                           style={{ background: '#ef4444', color: 'white', height:'46px' }}
+                        >
+                          <div style={{width:18, height:18}}><IconPDF/></div> PDF
+                        </motion.button>
+                      )}
                     </div>
                   </div>
-                ))}
-                
-                <div style={{textAlign:'center', padding:'20px', color:'var(--text-secondary)', fontSize:'12px'}}>
-                  Affichage des 100 premières lignes. Générez le PDF pour le document complet.
-                </div>
-              </div>
-            ) : (
-              <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)', background:'var(--bg-glass)', borderRadius:'20px'}}>
-                Aucune écriture trouvée sur cette période.
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* ================= INVENTAIRE SECTION ================= */}
-        {activeTab === 'inventaire' && (
-          <div style={{animation:'fadeUp 0.5s ease-out'}}>
-            
-            <div className="filter-card" style={{justifyContent:'flex-start'}}>
-              <div style={{flex:2}}>
-                <h3 style={{fontSize:'18px', fontWeight:'800', marginBottom:'5px', color:'var(--text-primary)'}}>Valorisation du Stock</h3>
-                <p style={{color:'var(--text-secondary)', fontSize:'13px'}}>État actuel des stocks et valorisation estimée.</p>
-              </div>
-              <button onClick={fetchInventaire} className="btn-action btn-refresh">
-                <div style={{width:18, height:18}}><IconRefresh /></div> Actualiser
-              </button>
-              {inventaireData.length > 0 && (
-                <button onClick={printInventaire} className="btn-action btn-pdf">
-                   <div style={{width:18, height:18}}><IconPDF /></div> PDF
-                </button>
+                  {/* DATA LIST / TABLE */}
+                  {journalData.length > 0 ? (
+                    <motion.div initial="hidden" animate="visible" variants={containerVariants}>
+                      <table className="modern-table">
+                        <thead>
+                          <tr><th>Date</th><th>Compte</th><th>Libellé</th><th style={{textAlign:'right'}}>Débit</th><th style={{textAlign:'right'}}>Crédit</th></tr>
+                        </thead>
+                        <tbody>
+                          {journalData.slice(0, 100).map((L, i) => (
+                            <motion.tr key={i} variants={itemVariants} whileHover={{ scale: 1.01, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} style={{ transition: 'all 0.2s' }}>
+                              <td data-label="Date" style={{fontWeight:500}}>{new Date(L.ecriture.date_ecriture).toLocaleDateString()}</td>
+                              <td data-label="Compte">
+                                <span style={{color:'var(--accent)', fontWeight:700, fontFamily:'monospace'}}>{L.compte.code_compte}</span>
+                                <div style={{fontSize:'0.8rem', color:'var(--text-secondary)'}}>{L.compte.libelle}</div>
+                              </td>
+                              <td data-label="Libellé">{L.ecriture.libelle}</td>
+                              <td data-label="Débit" style={{textAlign:'right', fontFamily:'monospace'}}>{L.debit > 0 ? L.debit.toLocaleString() : '-'}</td>
+                              <td data-label="Crédit" style={{textAlign:'right', fontFamily:'monospace'}}>{L.credit > 0 ? L.credit.toLocaleString() : '-'}</td>
+                            </motion.tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </motion.div>
+                  ) : (
+                    <motion.div initial={{opacity:0}} animate={{opacity:1}} style={{textAlign:'center', padding:'4rem', color:'var(--text-secondary)', border:'2px dashed var(--border)', borderRadius:'24px'}}>
+                      Aucune écriture trouvée. Lancez une recherche.
+                    </motion.div>
+                  )}
+                </div>
               )}
-            </div>
 
-            {loading ? (
-              <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)'}}>Calcul du stock...</div>
-            ) : inventaireData.length > 0 ? (
-              <div className="data-grid">
-                <div className="grid-header" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr'}}>
-                  <div>Article</div>
-                  <div style={{textAlign:'center'}}>Stock</div>
-                  <div style={{textAlign:'right'}}>Prix Unitaire</div>
-                  <div style={{textAlign:'right'}}>Valeur Totale</div>
-                </div>
-
-                {inventaireData.map((p, i) => (
-                  <div key={i} className="grid-row" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr', animationDelay: `${i * 0.03}s`}}>
-                    <div className="cell-desc" data-label="Article" style={{fontWeight:'700'}}>{p.nom}</div>
-                    <div style={{textAlign:'center'}} data-label="Quantité">
-                      <span className="cell-tag">{p.stock_actuel} {p.unite}</span>
-                    </div>
-                    <div className="cell-money" data-label="P.U." style={{fontSize:'14px', opacity:0.8}}>
-                      {p.prix_vente.toLocaleString()}
-                    </div>
-                    <div className="cell-money" data-label="Valeur" style={{color:'#10b981'}}>
-                      {(p.stock_actuel * p.prix_vente).toLocaleString()} F
-                    </div>
+              {activeTab === 'inventaire' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                   <div className="glass-panel" style={{ padding: '2rem', borderRadius: '24px', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'var(--shadow-soft)' }}>
+                      <div>
+                        <h3 style={{margin:0, fontSize:'1.2rem'}}>État des stocks</h3>
+                        <p style={{margin:'0.25rem 0 0 0', color:'var(--text-secondary)', fontSize:'0.9rem'}}>Valorisation en temps réel.</p>
+                      </div>
+                      <div style={{display:'flex', gap:'1rem'}}>
+                         <motion.button onClick={fetchInventaire} whileHover={{rotate:180, scale:1.1}} whileTap={{scale:0.9}} className="btn-modern" style={{background:'var(--bg-primary)', border:'1px solid var(--border)', padding:'12px', borderRadius:'50%'}}>
+                            <div style={{width:20, height:20}}><IconRefresh/></div>
+                         </motion.button>
+                         {inventaireData.length > 0 && (
+                            <motion.button onClick={printInventaire} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn-modern" style={{ background: '#ef4444', color: 'white' }}>
+                              <div style={{width:18, height:18}}><IconPDF/></div> Export
+                            </motion.button>
+                         )}
+                      </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{textAlign:'center', padding:'3rem', color:'var(--text-secondary)', background:'var(--bg-glass)', borderRadius:'20px'}}>
-                Aucun stock disponible.
-              </div>
-            )}
-          </div>
-        )}
 
+                  {inventaireData.length > 0 ? (
+                    <motion.div initial="hidden" animate="visible" variants={containerVariants} style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:'1.5rem'}}>
+                      {inventaireData.map((p, i) => (
+                        <motion.div 
+                          key={i} 
+                          variants={itemVariants}
+                          whileHover={{ y: -5, boxShadow: 'var(--shadow-hover)' }}
+                          style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: '20px', border: '1px solid var(--border)', display:'flex', flexDirection:'column', gap:'1rem' }}
+                        >
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+                             <div style={{fontWeight:700, fontSize:'1.1rem'}}>{p.nom}</div>
+                             <span style={{background:'var(--accent-glow)', color:'var(--accent)', padding:'4px 10px', borderRadius:'99px', fontSize:'0.75rem', fontWeight:700}}>{p.stock_actuel} {p.unite}</span>
+                          </div>
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end', borderTop:'1px solid var(--border)', paddingTop:'1rem', marginTop:'auto'}}>
+                             <div style={{fontSize:'0.85rem', color:'var(--text-secondary)'}}>P.U. {p.prix_vente.toLocaleString()}</div>
+                             <div style={{fontSize:'1.2rem', fontWeight:800, color:'var(--text-primary)'}}>{(p.stock_actuel * p.prix_vente).toLocaleString()} <span style={{fontSize:'0.8rem', fontWeight:400}}>FCFA</span></div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <div style={{textAlign:'center', color:'var(--text-secondary)'}}>Aucun stock.</div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
       </main>
     </div>
   );

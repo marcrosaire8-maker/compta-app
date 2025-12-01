@@ -7,9 +7,9 @@ import Sidebar from '../components/Sidebar';
 const IconSettings = () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>;
 const IconUsers = () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>;
 const IconCalendar = () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>;
+const IconActivity = () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
 const IconSun = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>;
 const IconMoon = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>;
-const IconTrash = () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>;
 
 /* --- HOOK TILT --- */
 const useTilt = (active) => {
@@ -46,12 +46,13 @@ export default function ParametresUltimate() {
   const [entreprise, setEntreprise] = useState(null);
   const [exercices, setExercices] = useState([]);
   const [membres, setMembres] = useState([]);
+  const [logs, setLogs] = useState([]); // Nouveau state pour les logs
   
   // UI States
   const [darkMode, setDarkMode] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [activeTab, setActiveTab] = useState('general'); // general, team, fiscal
+  const [activeTab, setActiveTab] = useState('general'); 
 
   // Forms
   const [companyForm, setCompanyForm] = useState({ nom: '', email: '' });
@@ -86,7 +87,13 @@ export default function ParametresUltimate() {
 
     setEntreprise(ste);
     setCompanyForm({ nom: ste.nom, email: ste.email_contact || '' });
-    await Promise.all([fetchExercices(ste.id), fetchMembres(ste.id)]);
+    
+    // Chargement parallèle
+    await Promise.all([
+        fetchExercices(ste.id), 
+        fetchMembres(ste.id),
+        fetchLogs(ste.id)
+    ]);
     setLoading(false);
   }
 
@@ -98,6 +105,17 @@ export default function ParametresUltimate() {
   async function fetchMembres(id) {
     const { data } = await supabase.from('membres_entreprise').select('*').eq('entreprise_id', id);
     setMembres(data || []);
+  }
+
+  // Fonction pour récupérer l'historique
+  async function fetchLogs(id) {
+    const { data } = await supabase
+        .from('logs_activite')
+        .select('*')
+        .eq('entreprise_id', id)
+        .order('created_at', { ascending: false })
+        .limit(50); // On récupère les 50 dernières actions
+    setLogs(data || []);
   }
 
   const updateEntreprise = async (e) => {
@@ -152,7 +170,7 @@ export default function ParametresUltimate() {
           --bg-main: #f2f2f7; --bg-glass: rgba(255, 255, 255, 0.65); --bg-card: #ffffff;
           --text-primary: #1d1d1f; --text-secondary: #86868b; --border: rgba(0,0,0,0.06);
           --shadow: 0 10px 40px -10px rgba(0,0,0,0.1); 
-          --primary: #ef4444; /* Red for Settings/Danger Zone feels */
+          --primary: #ef4444; 
           --primary-glow: rgba(239, 68, 68, 0.3);
           --input-bg: #f5f5f7;
         }
@@ -170,17 +188,14 @@ export default function ParametresUltimate() {
         body { font-family: 'Inter', sans-serif; overflow-x: hidden; background: var(--bg-main); transition: background 0.5s ease; }
         .app-wrapper { min-height: 100vh; position: relative; }
 
-        /* --- PARALLAX ORBS --- */
         .orb { position: fixed; border-radius: 50%; filter: blur(100px); z-index: 0; pointer-events: none; opacity: 0.4; }
         .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--primary); }
-        .orb-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #f59e0b; } /* Amber */
+        .orb-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #f59e0b; }
 
-        /* --- LAYOUT --- */
         .sidebar-wrapper { position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 50; transition: transform 0.3s ease; }
         .mobile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 40; display: none; opacity: 0; transition: opacity 0.3s; }
         main { min-height: 100vh; padding: 40px; margin-left: 260px; position: relative; z-index: 1; transition: margin-left 0.3s ease; }
 
-        /* --- HEADER --- */
         .header-bar { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px; animation: slideDown 0.8s ease-out; }
         .header-content h1 { font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 6px; background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%); -webkit-background-clip: text; color: transparent; }
         .actions { display: flex; gap: 12px; align-items: center; }
@@ -189,13 +204,11 @@ export default function ParametresUltimate() {
         .btn-theme { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: var(--transition); box-shadow: var(--shadow); color: var(--text-primary); }
         .btn-theme:hover { transform: scale(1.1); }
 
-        /* --- TABS --- */
         .tabs-container { display: flex; gap: 20px; margin-bottom: 30px; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow-x: auto; }
         .tab-btn { padding: 10px 20px; border-radius: 12px; cursor: pointer; font-weight: 600; color: var(--text-secondary); transition: 0.3s; display: flex; align-items: center; gap: 8px; border: none; background: transparent; }
         .tab-btn.active { background: var(--bg-glass); color: var(--text-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .tab-btn:hover:not(.active) { color: var(--text-primary); background: rgba(255,255,255,0.05); }
 
-        /* --- BENTO GRID --- */
         .bento-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; animation: fadeUp 0.6s ease-out; }
         
         .glass-card { background: var(--bg-glass); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 24px; padding: 30px; transition: 0.3s; overflow: hidden; position: relative; }
@@ -212,7 +225,6 @@ export default function ParametresUltimate() {
         .btn-primary { width: 100%; padding: 14px; border-radius: 14px; border: none; background: var(--primary); color: white; font-weight: 700; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 20px var(--primary-glow); }
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 15px 30px var(--primary-glow); }
 
-        /* --- LISTS --- */
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
         .list-item:last-child { border-bottom: none; }
         .list-main { font-weight: 600; color: var(--text-primary); }
@@ -221,7 +233,6 @@ export default function ParametresUltimate() {
         .badge-blue { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
         .badge-purple { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
 
-        /* --- RESPONSIVE --- */
         @media (max-width: 1024px) {
           .sidebar-wrapper { transform: translateX(-100%); }
           .sidebar-wrapper.open { transform: translateX(0); }
@@ -269,6 +280,9 @@ export default function ParametresUltimate() {
           </button>
           <button className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`} onClick={() => setActiveTab('team')}>
             <IconUsers /> Équipe
+          </button>
+          <button className={`tab-btn ${activeTab === 'activity' ? 'active' : ''}`} onClick={() => setActiveTab('activity')}>
+            <IconActivity /> Activités
           </button>
           <button className={`tab-btn ${activeTab === 'fiscal' ? 'active' : ''}`} onClick={() => setActiveTab('fiscal')}>
             <IconCalendar /> Exercices
@@ -345,6 +359,35 @@ export default function ParametresUltimate() {
                   </div>
                 ))}
                 {membres.length === 0 && <div style={{textAlign:'center', color:'var(--text-secondary)', padding:'20px'}}>Aucun membre</div>}
+              </div>
+            </TiltCard>
+          </div>
+        )}
+
+        {/* CONTENT: ACTIVITY LOGS (NEW) */}
+        {activeTab === 'activity' && (
+          <div className="bento-grid" style={{gridTemplateColumns:'1fr'}}>
+            <TiltCard className="glass-card">
+              <div className="card-title">
+                  <div className="card-icon"><IconActivity/></div> 
+                  Historique des opérations
+                  <button onClick={() => fetchLogs(entreprise.id)} style={{marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'var(--primary)'}}>Actualiser</button>
+              </div>
+              <div>
+                {logs.map(log => (
+                  <div key={log.id} className="list-item">
+                    <div>
+                      <div className="list-main">{log.action}</div>
+                      <div className="list-sub" style={{color:'var(--text-primary)'}}>
+                        Par: <strong>{log.user_email}</strong> • {new Date(log.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{textAlign:'right', fontSize:'13px', color:'var(--text-secondary)'}}>
+                      {log.details || '-'}
+                    </div>
+                  </div>
+                ))}
+                {logs.length === 0 && <div style={{textAlign:'center', color:'var(--text-secondary)', padding:'40px'}}>Aucune activité récente.</div>}
               </div>
             </TiltCard>
           </div>

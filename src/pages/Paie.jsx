@@ -1,551 +1,474 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { getEntrepriseForUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Format monétaire
-const formatMoney = (value) => value?.toLocaleString('fr-FR') + ' F' || '0 F';
+// Animations & Icons
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Plus, Printer, FileCheck, CheckCircle, Clock, 
+  DollarSign, TrendingDown, TrendingUp, Sun, Moon, X, User 
+} from 'lucide-react';
 
-export default function PaieUltimate() {
-  const navigate = useNavigate();
-  
-  // --- STATES LOGIQUES ---
+// --- CONFIG ANIMATION ---
+const containerVar = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+const itemVar = { hidden: { y: 20, opacity: 0 }, show: { y: 0, opacity: 1 } };
+
+export default function Paie() {
   const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+
+  // Data State
   const [entreprise, setEntreprise] = useState(null);
   const [bulletins, setBulletins] = useState([]);
   const [employes, setEmployes] = useState([]);
-  
-  // --- STATES UI & UX ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  // --- FORM STATE ---
+  // Modal & Form State
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState({
     employe_id: '',
-    mois: new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+    mois: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+    date_paie: new Date().toISOString().split('T')[0],
     salaire_base: 0,
     primes: 0,
     cotisations: 0,
-    impots: 0
+    impots: 0,
+    avance_opposition: 0
   });
 
-  // --- INIT ---
-  useEffect(() => { initData(); }, []);
-
-  // Parallaxe Mouse Effect
-  const handleMouseMove = (e) => {
-    const { clientX, clientY } = e;
-    const { innerWidth, innerHeight } = window;
-    const x = (clientX / innerWidth) * 2 - 1;
-    const y = (clientY / innerHeight) * 2 - 1;
-    setMousePos({ x, y });
+  // --- THEME ENGINE ---
+  const theme = {
+    bg: darkMode ? '#0f172a' : '#f8fafc',
+    text: darkMode ? '#f1f5f9' : '#1e293b',
+    textMuted: darkMode ? '#94a3b8' : '#64748b',
+    card: darkMode ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.8)',
+    border: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+    inputBg: darkMode ? 'rgba(15, 23, 42, 0.5)' : '#fff',
+    accent: '#3b82f6',
+    success: '#10b981',
+    danger: '#ef4444'
   };
 
+  useEffect(() => { initData(); }, []);
+
+  // --- LOGIQUE METIER (IDENTIQUE) ---
   async function initData() {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return navigate('/login');
-
+    if (!user) return;
     const ste = await getEntrepriseForUser(user.id, user.email);
     if (ste) {
       setEntreprise(ste);
-      await Promise.all([fetchBulletins(ste.id), fetchEmployes(ste.id)]);
+      fetchBulletins(ste.id);
+      fetchEmployes(ste.id);
     }
     setLoading(false);
   }
 
   async function fetchBulletins(id) {
-    const { data } = await supabase
-      .from('fiches_paie')
-      .select('*')
-      .eq('entreprise_id', id)
-      .order('created_at', { ascending: false });
+    const { data } = await supabase.from('fiches_paie').select('*').eq('entreprise_id', id).order('created_at', { ascending: false });
     setBulletins(data || []);
   }
 
   async function fetchEmployes(id) {
-    const { data } = await supabase
-      .from('tiers')
-      .select('id, nom_complet')
-      .eq('entreprise_id', id)
-      .eq('type_tier', 'EMPLOYE');
+    const { data } = await supabase.from('tiers').select('id, nom_complet').eq('entreprise_id', id).eq('type_tier', 'EMPLOYE');
     setEmployes(data || []);
   }
 
-  // --- CALCULS ---
-  const brut = Number(form.salaire_base) + Number(form.primes);
-  const net = brut - Number(form.cotisations) - Number(form.impots);
+  // Calcul Automatique
+  useEffect(() => {
+    const brut = Number(form.salaire_base) + Number(form.primes);
+    const cnss = Math.round(brut * 0.036); 
+    const baseImposable = brut - cnss;
+    let its = 0;
+    if (baseImposable > 50000) {
+        its = Math.round((baseImposable - 50000) * 0.10);
+    }
+    if (brut > 0) {
+        setForm(prev => ({ ...prev, cotisations: cnss, impots: its }));
+    }
+  }, [form.salaire_base, form.primes]);
 
-  // --- ACTIONS ---
+  const brut = Number(form.salaire_base) + Number(form.primes);
+  const totalRetenues = Number(form.cotisations) + Number(form.impots) + Number(form.avance_opposition);
+  const netAPayer = brut - totalRetenues;
+
   async function handleSave(e) {
     e.preventDefault();
-    if (!form.employe_id) return alert("Veuillez sélectionner un employé");
-
+    if (!form.employe_id) return alert("Veuillez sélectionner un employé.");
     try {
-      const employe = employes.find(e => e.id === form.employe_id);
+      const employeChoisi = employes.find(e => e.id === form.employe_id);
       const payload = {
-        entreprise_id: entreprise.id,
-        employe_id: form.employe_id,
-        employe_nom: employe?.nom_complet || 'Inconnu',
-        mois: form.mois,
-        salaire_base: Number(form.salaire_base),
-        primes: Number(form.primes),
-        salaire_brut: brut,
-        cotisations_sociales: Number(form.cotisations),
-        impots_revenu: Number(form.impots),
-        salaire_net: net,
-        est_comptabilise: false
+        entreprise_id: entreprise.id, employe_id: form.employe_id, employe_nom: employeChoisi ? employeChoisi.nom_complet : 'Inconnu',
+        mois: form.mois, date_paie: form.date_paie, salaire_base: Number(form.salaire_base), primes: Number(form.primes),
+        cotisations_sociales: Number(form.cotisations), impots_revenu: Number(form.impots), avance_opposition: Number(form.avance_opposition),
+        salaire_net: netAPayer
       };
-
-      await supabase.from('fiches_paie').insert([payload]);
-      alert("Bulletin généré avec succès !");
-      setIsModalOpen(false);
-      setForm({
-        employe_id: '',
-        mois: new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-        salaire_base: 0, primes: 0, cotisations: 0, impots: 0
-      });
-      fetchBulletins(entreprise.id);
-    } catch (err) {
-      alert("Erreur : " + err.message);
-    }
+      const { error } = await supabase.from('fiches_paie').insert([payload]);
+      if (error) throw error;
+      alert("Bulletin créé avec succès !"); setIsModalOpen(false); fetchBulletins(entreprise.id);
+    } catch (error) { alert("Erreur : " + error.message); }
   }
 
   const generatePDF = (b) => {
     const doc = new jsPDF();
-    // Header Pro
-    doc.setFillColor(79, 70, 229); // Indigo
-    doc.rect(0, 0, 210, 30, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text("BULLETIN DE PAIE", 105, 20, { align: "center" });
-    
-    // Info
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(11);
-    doc.text(`Employeur : ${entreprise?.nom || 'Entreprise'}`, 14, 45);
-    doc.text(`Employé : ${b.employe_nom}`, 14, 52);
-    doc.text(`Période : ${b.mois}`, 14, 59);
-
-    autoTable(doc, {
-      startY: 70,
-      head: [['Rubrique', 'Montant']],
-      body: [
-        ['Salaire de base', formatMoney(b.salaire_base)],
-        ['Primes & indemnités', formatMoney(b.primes)],
-        ['Salaire BRUT', { content: formatMoney(b.salaire_brut), styles: { fontStyle: 'bold' } }],
-        ['Cotisations sociales', formatMoney(b.cotisations_sociales)],
-        ['Impôts sur le revenu', formatMoney(b.impots_revenu)],
-        ['NET À PAYER', { content: formatMoney(b.salaire_net), styles: { fillColor: [220, 252, 231], fontStyle: 'bold', textColor: [22, 101, 52], fontSize: 14 } }]
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229], textColor: 255 },
-      styles: { cellPadding: 8, fontSize: 11 }
-    });
-
-    doc.save(`Paie_${b.employe_nom}_${b.mois}.pdf`);
+    doc.setFontSize(18); doc.text("BULLETIN DE PAIE", 105, 20, null, null, "center");
+    doc.setFontSize(10); doc.text(`Employeur : ${entreprise.nom}`, 14, 35); doc.text(`Employé : ${b.employe_nom}`, 140, 35); doc.text(`Période : ${b.mois}`, 14, 45);
+    autoTable(doc, { startY: 55, head: [['Rubrique', 'Gains (+)', 'Retenues (-)']], body: [
+        ['Salaire de Base', b.salaire_base.toLocaleString(), ''], ['Primes & Indemnités', b.primes.toLocaleString(), ''], ['Salaire BRUT', b.salaire_brut.toLocaleString(), ''],
+        ['CNSS (Part Salariale)', '', b.cotisations_sociales.toLocaleString()], ['Impôts (ITS/IRPP)', '', b.impots_revenu.toLocaleString()], ['Avances / Oppositions', '', (b.avance_opposition || 0).toLocaleString()],
+    ], theme: 'grid' });
+    doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.text(`NET À PAYER : ${b.salaire_net.toLocaleString()} FCFA`, 140, doc.lastAutoTable.finalY + 15);
+    doc.save(`Paie_${b.employe_nom}.pdf`);
   };
 
   const comptabiliser = async (b) => {
-    if (!confirm("Confirmer la comptabilisation ?")) return;
-    try {
-      const { data: ecriture } = await supabase
-        .from('ecritures_comptables')
-        .insert([{
-          entreprise_id: entreprise.id,
-          date_ecriture: new Date().toISOString().split('T')[0],
-          libelle: `Paie ${b.mois} - ${b.employe_nom}`,
-          journal_code: 'OD'
-        }])
-        .select().single();
+      if(!confirm("Générer l'écriture comptable ?")) return;
+      try {
+          const { data: ecriture } = await supabase.from('ecritures_comptables').insert([{
+              entreprise_id: entreprise.id, date_ecriture: b.date_paie, libelle: `Paie ${b.mois} - ${b.employe_nom}`, journal_code: 'OD'
+          }]).select().single();
+          
+          const getCompteID = async (code) => {
+             const { data } = await supabase.from('plan_comptable').select('id').eq('entreprise_id', entreprise.id).ilike('code_compte', `${code}%`).maybeSingle();
+             return data ? data.id : null;
+          }
 
-      await supabase.from('lignes_ecriture').insert([
-        { ecriture_id: ecriture.id, debit: b.salaire_brut, credit: 0, compte_id: null },
-        { ecriture_id: ecriture.id, debit: 0, credit: b.salaire_net, compte_id: null }
-      ]);
+          const lignes = [
+              { ecriture_id: ecriture.id, debit: b.salaire_brut, credit: 0, compte_id: await getCompteID('661') },
+              { ecriture_id: ecriture.id, debit: 0, credit: b.salaire_net, compte_id: await getCompteID('422') },
+              { ecriture_id: ecriture.id, debit: 0, credit: b.cotisations_sociales, compte_id: await getCompteID('431') },
+              { ecriture_id: ecriture.id, debit: 0, credit: b.impots_revenu, compte_id: await getCompteID('447') },
+          ];
+          if (b.avance_opposition > 0) lignes.push({ ecriture_id: ecriture.id, debit: 0, credit: b.avance_opposition, compte_id: await getCompteID('421') });
 
-      await supabase.from('fiches_paie').update({ est_comptabilise: true }).eq('id', b.id);
-      fetchBulletins(entreprise.id);
-      alert("Comptabilisé !");
-    } catch (err) {
-      alert("Erreur : " + err.message);
-    }
+          await supabase.from('lignes_ecriture').insert(lignes.filter(l => l.compte_id));
+          await supabase.from('fiches_paie').update({ est_comptabilise: true }).eq('id', b.id);
+          fetchBulletins(entreprise.id); alert("Écritures générées avec succès !");
+      } catch (e) { alert("Erreur: " + e.message); }
   };
 
-  if (loading) return <div style={{height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#000', color:'white'}}>Chargement...</div>;
-
-  const totalPaie = bulletins.reduce((acc, b) => acc + b.salaire_net, 0);
+  if (loading) return <div style={{height:'100vh', display:'flex', justifyContent:'center', alignItems:'center', background: theme.bg, color: theme.text}}>Chargement Paie...</div>;
 
   return (
-    <div className={`app-wrapper ${darkMode ? 'dark' : 'light'}`} onMouseMove={handleMouseMove}>
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-        :root {
-          --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-        }
-
-        .light {
-          --bg-main: #f2f2f7;
-          --bg-glass: rgba(255, 255, 255, 0.75);
-          --bg-card: #ffffff;
-          --text-primary: #1d1d1f;
-          --text-secondary: #86868b;
-          --border: rgba(0,0,0,0.06);
-          --shadow: 0 10px 40px -10px rgba(0,0,0,0.1);
-          --primary: #4f46e5; /* Indigo */
-          --primary-glow: rgba(79, 70, 229, 0.3);
-          --success: #10b981;
-          --warning: #f59e0b;
-          --input-bg: #f5f5f7;
-        }
-
-        .dark {
-          --bg-main: #000000;
-          --bg-glass: rgba(28, 28, 30, 0.75);
-          --bg-card: #1c1c1e;
-          --text-primary: #f5f5f7;
-          --text-secondary: #a1a1a6;
-          --border: rgba(255,255,255,0.15);
-          --shadow: 0 20px 50px -10px rgba(0,0,0,0.6);
-          --primary: #6366f1;
-          --primary-glow: rgba(99, 102, 241, 0.4);
-          --success: #34d399;
-          --warning: #fbbf24;
-          --input-bg: #2c2c2e;
-        }
-
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family: 'Inter', sans-serif; overflow-x: hidden; background: var(--bg-main); transition: background 0.5s ease; }
-
-        .app-wrapper { min-height: 100vh; position: relative; }
-
-        /* --- SIDEBAR RESPONSIVE --- */
-        .sidebar-wrapper {
-          position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 50;
-          transition: transform 0.3s ease;
-        }
-        .mobile-overlay {
-          position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 40;
-          display: none; opacity: 0; transition: opacity 0.3s;
-        }
-
-        /* --- PARALLAX ORBS (Indigo/Violet/Green theme for Money) --- */
-        .orb {
-          position: fixed; border-radius: 50%; filter: blur(100px); z-index: 0; pointer-events: none; opacity: 0.4;
-        }
-        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--primary); }
-        .orb-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #8b5cf6; } /* Violet */
-
-        /* --- MAIN CONTENT --- */
-        main {
-          min-height: 100vh;
-          padding: 40px;
-          margin-left: 260px;
-          position: relative; 
-          z-index: 1;
-          transition: margin-left 0.3s ease;
-        }
-
-        /* --- HEADER --- */
-        .header-bar {
-          display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;
-          animation: slideDown 0.8s ease-out;
-        }
-        .header-content h1 {
-          font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 6px;
-          background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
-          -webkit-background-clip: text; color: transparent;
-        }
-        .actions { display: flex; gap: 12px; align-items: center; }
-
-        .btn-menu-mobile {
-          display: none; background: var(--bg-card); border: 1px solid var(--border); 
-          color: var(--text-primary); font-size: 24px; padding: 8px 12px; 
-          border-radius: 12px; cursor: pointer;
-        }
-
-        .btn-theme {
-          width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border);
-          background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center;
-          font-size: 20px; transition: var(--transition); box-shadow: var(--shadow);
-        }
-        .btn-theme:hover { transform: scale(1.1); }
-
-        .btn-primary {
-          padding: 14px 24px; border-radius: 99px; border: none;
-          background: linear-gradient(135deg, var(--primary), #4338ca);
-          color: white; font-weight: 600; font-size: 15px; cursor: pointer;
-          box-shadow: 0 8px 20px var(--primary-glow); transition: var(--transition);
-          display: flex; align-items: center; gap: 8px; white-space: nowrap;
-        }
-        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 15px 30px var(--primary-glow); }
-
-        /* --- STATS GRID --- */
-        .stats-grid {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 30px;
-        }
-        .stat-card {
-          background: var(--bg-glass); backdrop-filter: blur(20px); border: 1px solid var(--border);
-          padding: 20px; border-radius: 20px; animation: fadeUp 0.6s ease-out;
-        }
-        .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 6px; }
-        .stat-value { font-size: 24px; font-weight: 800; color: var(--text-primary); }
-
-        /* --- LIST / TABLE --- */
-        .list-container { display: flex; flex-direction: column; gap: 12px; }
+    <div style={{ position: 'relative', minHeight: '100vh', background: theme.bg, color: theme.text, fontFamily: 'Inter, sans-serif', overflowX:'hidden', transition: 'background 0.5s ease' }}>
         
-        .list-header {
-          display: grid; grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1fr 1.5fr; gap: 20px;
-          padding: 0 24px; margin-bottom: 4px;
-          color: var(--text-secondary); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
-        }
-        
-        .row-item {
-          display: grid; grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1fr 1.5fr; gap: 20px; align-items: center;
-          background: var(--bg-glass); backdrop-filter: blur(20px);
-          border: 1px solid var(--border); border-radius: 18px;
-          padding: 18px 24px;
-          transition: var(--transition);
-          animation: fadeSlide 0.5s ease-out backwards;
-        }
-        .row-item:hover {
-          background: var(--bg-card); border-color: var(--primary);
-          transform: scale(1.01); z-index: 2; box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-        }
-
-        .cell-main { font-weight: 700; color: var(--text-primary); font-size: 14px; }
-        .cell-sub { color: var(--text-secondary); font-size: 13px; }
-        .cell-amount { font-weight: 800; color: var(--success); font-size: 15px; }
-        .cell-brut { color: var(--text-primary); opacity: 0.7; }
-
-        .badge {
-          padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; display: inline-block; text-align: center;
-        }
-        .badge-done { background: rgba(16, 185, 129, 0.15); color: var(--success); }
-        .badge-pending { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
-
-        .actions-cell { display: flex; gap: 8px; justify-content: flex-end; }
-        .btn-icon {
-          padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.1);
-          color: var(--text-primary); cursor: pointer; transition: 0.2s; font-size: 12px; font-weight: 600;
-        }
-        .btn-icon:hover { background: var(--text-primary); color: var(--bg-main); }
-
-        /* --- MODAL --- */
-        .modal-overlay {
-          position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
-          display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;
-        }
-        .modal-card {
-          width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto;
-          background: var(--bg-card); padding: 30px; border-radius: 28px;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.3); border: 1px solid var(--border);
-          animation: zoomIn 0.3s ease-out;
-        }
-        .modal-title { font-size: 24px; font-weight: 800; margin-bottom: 24px; color: var(--primary); }
-
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-        .input-group label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
-        .input-field {
-          width: 100%; padding: 14px; border-radius: 14px; border: 1px solid transparent;
-          background: var(--input-bg); color: var(--text-primary); outline: none; transition: 0.3s;
-        }
-        .input-field:focus { border-color: var(--primary); background: var(--bg-card); box-shadow: 0 0 0 4px var(--primary-glow); }
-
-        .summary-box {
-          background: rgba(79, 70, 229, 0.05); border-radius: 16px; padding: 20px; margin: 20px 0;
-          border: 1px solid rgba(79, 70, 229, 0.1); text-align: right;
-        }
-        .summary-val { font-size: 24px; font-weight: 900; color: var(--success); }
-
-        /* --- MEDIA QUERIES (MOBILE) --- */
-        @media (max-width: 1024px) {
-          .sidebar-wrapper { transform: translateX(-100%); }
-          .sidebar-wrapper.open { transform: translateX(0); }
-          .mobile-overlay.open { display: block; opacity: 1; }
-          main { margin-left: 0; padding: 20px; width: 100%; }
-          .btn-menu-mobile { display: block; }
-        }
-
-        @media (max-width: 768px) {
-          .header-bar { flex-direction: column; align-items: flex-start; }
-          .actions { width: 100%; justify-content: space-between; }
-          
-          /* Table -> Cards */
-          .list-header { display: none; }
-          .row-item {
-            display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-            padding: 20px; position: relative;
+        {/* --- STYLE CSS RESPONSIVE --- */}
+        <style>{`
+          /* Layout Principal */
+          .responsive-main {
+            flex: 1;
+            padding: clamp(15px, 4vw, 40px);
+            margin-left: 260px;
+            transition: margin 0.3s ease;
           }
-          .cell-main { font-size: 16px; margin-bottom: 4px; }
-          .cell-sub { font-size: 13px; opacity: 0.8; }
-          .cell-amount { font-size: 22px; margin: 8px 0; }
-          .cell-brut { display: none; } /* On cache le brut sur mobile pour simplifier */
-          .actions-cell { width: 100%; justify-content: space-between; margin-top: 10px; }
-          .btn-icon { flex: 1; text-align: center; }
 
-          /* Form */
-          .form-grid { grid-template-columns: 1fr; }
-        }
+          /* Grille du tableau (Desktop) */
+          .bulletin-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr 1fr 1.2fr 1fr 120px;
+            align-items: center;
+            gap: 10px;
+          }
 
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeSlide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-      `}</style>
+          /* Grille du formulaire modal (Gains/Retenues) */
+          .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
 
-      {/* OVERLAY & SIDEBAR */}
-      <div className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`} onClick={() => setIsMobileMenuOpen(false)}></div>
-      <div className={`sidebar-wrapper ${isMobileMenuOpen ? 'open' : ''}`}>
-        <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} />
-      </div>
+          .mobile-label { display: none; }
+          .page-header { display: flex; justify-content: space-between; alignItems: center; marginBottom: 35px; flex-wrap: wrap; gap: 20px; }
+          .header-controls { display: flex; gap: 12px; }
 
-      {/* PARALLAX ORBS */}
-      <div className="orb orb-1" style={{ transform: `translate(${mousePos.x * 20}px, ${mousePos.y * 20}px)` }}></div>
-      <div className="orb orb-2" style={{ transform: `translate(${mousePos.x * -20}px, ${mousePos.y * -20}px)` }}></div>
+          /* RESPONSIVE MEDIA QUERIES */
+          @media (max-width: 1024px) {
+            .responsive-main { margin-left: 0; }
+          }
 
-      <main>
-        {/* HEADER */}
-        <div className="header-bar">
-          <div style={{display:'flex', alignItems:'center', gap:'15px', width:'100%'}}>
-            <button className="btn-menu-mobile" onClick={() => setIsMobileMenuOpen(true)}>☰</button>
-            <div className="header-content">
-              <h1>Gestion de la Paie</h1>
-              <div style={{color:'var(--text-secondary)'}}>Bulletins et salaires</div>
-            </div>
-          </div>
-          <div className="actions">
-            <button className="btn-theme" onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
-            <button className="btn-primary" onClick={() => setIsModalOpen(true)}>+ Nouveau Bulletin</button>
-          </div>
+          @media (max-width: 768px) {
+            .page-header { flex-direction: column; align-items: flex-start; }
+            .header-controls { width: 100%; justify-content: space-between; }
+
+            /* Table -> Cards */
+            .table-header { display: none !important; }
+            
+            .bulletin-card {
+                display: flex !important;
+                flex-direction: column;
+                gap: 12px !important;
+                padding: 20px !important;
+            }
+
+            .bulletin-card > div {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                text-align: left !important;
+                border-bottom: 1px dashed ${theme.border};
+                padding-bottom: 8px;
+            }
+            .bulletin-card > div:last-child { border-bottom: none; }
+
+            .mobile-label { 
+                display: inline-block; 
+                font-weight: 600; 
+                color: ${theme.textMuted};
+                font-size: 0.85rem;
+            }
+
+            /* Modal Input Stacking */
+            .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; gap: 15px; }
+          }
+        `}</style>
+
+        {/* PARALLAX ORBS */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+            <motion.div animate={{ x: [0, 60, 0], y: [0, -40, 0] }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+                style={{ position:'absolute', top:'-15%', right:'-5%', width:'600px', height:'600px', borderRadius:'50%', background: darkMode ? 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, rgba(0,0,0,0) 70%)' : 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(80px)' }} />
+            <motion.div animate={{ x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                style={{ position:'absolute', bottom:'-10%', left:'-10%', width:'500px', height:'500px', borderRadius:'50%', background: darkMode ? 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, rgba(0,0,0,0) 70%)' : 'radial-gradient(circle, rgba(16,185,129,0.15) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(80px)' }} />
         </div>
 
-        {/* STATS */}
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-label">Masse Salariale Totale</div>
-            <div className="stat-value" style={{color: 'var(--primary)'}}>{formatMoney(totalPaie)}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Bulletins Générés</div>
-            <div className="stat-value">{bulletins.length}</div>
-          </div>
+        <div style={{ display: 'flex', position: 'relative', zIndex: 10 }}>
+            <Sidebar entrepriseNom={entreprise?.nom} userRole={entreprise?.role} darkMode={darkMode} />
+            
+            <main className="responsive-main">
+                
+                {/* HEADER */}
+                <header className="page-header">
+                    <div>
+                        <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #3b82f6 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                            Gestion Paie
+                        </h1>
+                        <p style={{ color: theme.textMuted, marginTop: 5, fontSize: '1.05rem' }}>Centralisez les bulletins et les déclarations.</p>
+                    </div>
+                    <div className="header-controls">
+                        <GlassButton onClick={() => setDarkMode(!darkMode)} theme={theme} icon>
+                            {darkMode ? <Sun size={20}/> : <Moon size={20}/>}
+                        </GlassButton>
+                        <PrimaryButton onClick={() => { setIsModalOpen(true); }}>
+                            <Plus size={20} strokeWidth={3}/> <span>Nouveau</span>
+                        </PrimaryButton>
+                    </div>
+                </header>
+
+                {/* LISTE DES BULLETINS */}
+                <motion.div variants={containerVar} initial="hidden" animate="show" style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+                    
+                    {/* Header Row (Desktop Only) */}
+                    <div className="bulletin-grid table-header" style={{ padding: '0 20px', color: theme.textMuted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <div>Période</div>
+                        <div>Employé</div>
+                        <div style={{textAlign:'right'}}>Brut</div>
+                        <div style={{textAlign:'right'}}>Retenues</div>
+                        <div style={{textAlign:'right'}}>Net à Payer</div>
+                        <div style={{textAlign:'center'}}>Statut</div>
+                        <div style={{textAlign:'right'}}>Actions</div>
+                    </div>
+
+                    {bulletins.map(b => {
+                        const retenues = b.cotisations_sociales + b.impots_revenu + (b.avance_opposition || 0);
+                        return (
+                            <motion.div 
+                                key={b.id} variants={itemVar} whileHover={{ scale: 1.005, x: 5 }}
+                                className="bulletin-grid bulletin-card"
+                                style={{ 
+                                    background: theme.card, padding: '20px', borderRadius: 16, 
+                                    border: `1px solid ${theme.border}`, backdropFilter: 'blur(12px)',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                                }}
+                            >
+                                <div>
+                                    <span className="mobile-label">Période</span>
+                                    <div style={{ display:'flex', alignItems:'center', gap: 8, fontWeight: 600 }}>
+                                        <Clock size={16} color={theme.textMuted}/> {b.mois}
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <span className="mobile-label">Employé</span>
+                                    <div style={{ display:'flex', alignItems:'center', gap: 10 }}>
+                                        <div style={{ width: 35, height: 35, borderRadius: '50%', background: 'linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)', display:'flex', alignItems:'center', justifyContent:'center', color: '#64748b' }}>
+                                            <User size={18}/>
+                                        </div>
+                                        <span style={{ fontWeight: 700 }}>{b.employe_nom}</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ textAlign: 'right', color: theme.textMuted }}>
+                                    <span className="mobile-label">Brut</span>
+                                    {b.salaire_brut.toLocaleString()}
+                                </div>
+
+                                <div style={{ textAlign: 'right', color: theme.danger, fontWeight: 500 }}>
+                                    <span className="mobile-label">Retenues</span>
+                                    - {retenues.toLocaleString()}
+                                </div>
+
+                                <div style={{ textAlign: 'right', color: theme.success, fontWeight: 800, fontSize: '1.1rem' }}>
+                                    <span className="mobile-label">Net à Payer</span>
+                                    {b.salaire_net.toLocaleString()} F
+                                </div>
+
+                                <div style={{ textAlign: 'center' }}>
+                                    <span className="mobile-label">Statut</span>
+                                    {b.est_comptabilise ? (
+                                        <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: theme.success, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                            <CheckCircle size={12}/> Validé
+                                        </span>
+                                    ) : (
+                                        <span style={{ background: 'rgba(249, 115, 22, 0.15)', color: '#f97316', padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                            <Clock size={12}/> Attente
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                    <span className="mobile-label"></span>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button onClick={() => generatePDF(b)} title="Imprimer" style={{ padding: 8, borderRadius: 10, border: 'none', background: 'transparent', color: theme.textMuted, cursor: 'pointer', transition: 'background 0.2s' }}>
+                                            <Printer size={18}/>
+                                        </button>
+                                        {!b.est_comptabilise && (
+                                            <button onClick={() => comptabiliser(b)} title="Comptabiliser" style={{ padding: 8, borderRadius: 10, border: 'none', background: 'transparent', color: theme.accent, cursor: 'pointer', transition: 'background 0.2s' }}>
+                                                <FileCheck size={18}/>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )
+                    })}
+
+                    {bulletins.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted }}>
+                            <DollarSign size={50} style={{ opacity: 0.2, marginBottom: 15 }} />
+                            <p>Aucun bulletin de paie généré pour le moment.</p>
+                        </div>
+                    )}
+                </motion.div>
+
+            </main>
         </div>
 
-        {/* LISTE DES BULLETINS */}
-        <div className="list-container">
-          <div className="list-header">
-            <div>Période</div>
-            <div>Employé</div>
-            <div>Salaire Brut</div>
-            <div>Net à Payer</div>
-            <div>Statut</div>
-            <div style={{textAlign:'right'}}>Actions</div>
-          </div>
+        {/* --- MODAL CREATION --- */}
+        <AnimatePresence>
+        {isModalOpen && (
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, padding: 10 }}>
+                <motion.div 
+                    initial={{ y: 50, opacity: 0, scale: 0.95 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 20, opacity: 0 }}
+                    style={{ background: theme.bg, width: '100%', maxWidth: '600px', borderRadius: 24, padding: 35, border: `1px solid ${theme.border}`, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', maxHeight: '90vh', overflowY: 'auto' }}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.5rem', background: 'linear-gradient(to right, #3b82f6, #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                Nouveau Bulletin
+                            </h2>
+                            <p style={{ margin: '5px 0 0 0', color: theme.textMuted, fontSize: '0.9rem' }}>Les calculs fiscaux sont automatiques.</p>
+                        </div>
+                        <button onClick={() => setIsModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: theme.textMuted }}><X /></button>
+                    </div>
 
-          {bulletins.map((b, i) => (
-            <div key={b.id} className="row-item" style={{animationDelay: `${i * 0.05}s`}}>
-              <div className="cell-sub" style={{fontWeight:'600'}}>{b.mois}</div>
-              <div className="cell-main">{b.employe_nom}</div>
-              <div className="cell-brut">{formatMoney(b.salaire_brut)}</div>
-              <div className="cell-amount">{formatMoney(b.salaire_net)}</div>
-              <div>
-                {b.est_comptabilise ? (
-                  <span className="badge badge-done">Comptabilisé</span>
-                ) : (
-                  <span className="badge badge-pending">En attente</span>
-                )}
-              </div>
-              <div className="actions-cell">
-                <button className="btn-icon" onClick={() => generatePDF(b)}>PDF</button>
-                {!b.est_comptabilise && (
-                  <button className="btn-icon" onClick={() => comptabiliser(b)} style={{color:'var(--primary)'}}>
-                    Compta
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+                    <form onSubmit={handleSave}>
+                        {/* 1. INFO GÉNÉRALES */}
+                        <div className="form-grid-2" style={{ marginBottom: 25 }}>
+                            <FormGroup label="Employé" theme={theme}>
+                                <select value={form.employe_id} onChange={e => setForm({...form, employe_id: e.target.value})} style={inputStyle(theme)} required>
+                                    <option value="">-- Sélectionner --</option>
+                                    {employes.map(em => <option key={em.id} value={em.id}>{em.nom_complet}</option>)}
+                                </select>
+                            </FormGroup>
+                            <FormGroup label="Période (Mois)" theme={theme}>
+                                <input type="text" value={form.mois} onChange={e => setForm({...form, mois: e.target.value})} style={inputStyle(theme)} />
+                            </FormGroup>
+                        </div>
 
-          {bulletins.length === 0 && (
-            <div style={{textAlign:'center', padding:'4rem', color:'var(--text-secondary)', fontStyle:'italic'}}>
-              Aucun bulletin de paie pour le moment.
-            </div>
-          )}
-        </div>
-      </main>
+                        {/* 2. GAINS (Vert) */}
+                        <div style={{ background: darkMode ? 'rgba(16, 185, 129, 0.05)' : '#f0fdf4', borderRadius: 16, padding: 20, border: `1px solid ${darkMode ? 'rgba(16, 185, 129, 0.2)' : '#bbf7d0'}`, marginBottom: 20 }}>
+                            <h3 style={{ margin: '0 0 15px 0', fontSize: '1rem', color: '#166534', display: 'flex', alignItems: 'center', gap: 8 }}><TrendingUp size={18}/> Gains</h3>
+                            <div className="form-grid-2">
+                                <FormGroup label="Salaire de Base" theme={theme}>
+                                    <input type="number" value={form.salaire_base} onChange={e => setForm({...form, salaire_base: e.target.value})} style={inputStyle(theme)} />
+                                </FormGroup>
+                                <FormGroup label="Primes & Indemnités" theme={theme}>
+                                    <input type="number" value={form.primes} onChange={e => setForm({...form, primes: e.target.value})} style={inputStyle(theme)} />
+                                </FormGroup>
+                            </div>
+                            <div style={{ textAlign: 'right', marginTop: 10, fontWeight: 700, color: theme.text, opacity: 0.8 }}>Brut : {brut.toLocaleString()} F</div>
+                        </div>
 
-      {/* MODAL CREATION */}
-      {isModalOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
-          <div className="modal-content">
-            <h2 className="modal-title">Nouveau Bulletin</h2>
-            <form onSubmit={handleSave}>
-              <div className="form-grid">
-                <div className="input-group">
-                  <label>Employé</label>
-                  <select 
-                    className="input-field"
-                    value={form.employe_id} 
-                    onChange={e => setForm({...form, employe_id: e.target.value})} 
-                    required
-                  >
-                    <option value="">-- Sélectionner --</option>
-                    {employes.map(e => <option key={e.id} value={e.id}>{e.nom_complet}</option>)}
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label>Période (Mois)</label>
-                  <input className="input-field" value={form.mois} onChange={e => setForm({...form, mois: e.target.value})} />
-                </div>
-              </div>
+                        {/* 3. RETENUES (Rouge) */}
+                        <div style={{ background: darkMode ? 'rgba(239, 68, 68, 0.05)' : '#fef2f2', borderRadius: 16, padding: 20, border: `1px solid ${darkMode ? 'rgba(239, 68, 68, 0.2)' : '#fecaca'}`, marginBottom: 25 }}>
+                            <h3 style={{ margin: '0 0 15px 0', fontSize: '1rem', color: '#991b1b', display: 'flex', alignItems: 'center', gap: 8 }}><TrendingDown size={18}/> Retenues</h3>
+                            <div className="form-grid-3">
+                                <FormGroup label="CNSS (Auto)" theme={theme}>
+                                    <input type="number" value={form.cotisations} onChange={e => setForm({...form, cotisations: e.target.value})} style={inputStyle(theme)} />
+                                </FormGroup>
+                                <FormGroup label="Impôt ITS (Auto)" theme={theme}>
+                                    <input type="number" value={form.impots} onChange={e => setForm({...form, impots: e.target.value})} style={inputStyle(theme)} />
+                                </FormGroup>
+                                <FormGroup label="Avance / Oppos." theme={theme}>
+                                    <input type="number" value={form.avance_opposition} onChange={e => setForm({...form, avance_opposition: e.target.value})} style={{...inputStyle(theme), borderColor: theme.danger, color: theme.danger, fontWeight: 'bold'}} placeholder="0" />
+                                </FormGroup>
+                            </div>
+                        </div>
 
-              <div style={{background:'var(--bg-main)', padding:'20px', borderRadius:'16px', marginBottom:'20px'}}>
-                <h3 style={{fontSize:'14px', marginBottom:'15px', color:'var(--text-primary)'}}>Revenus</h3>
-                <div className="form-grid">
-                  <div className="input-group">
-                    <label>Salaire de Base</label>
-                    <input type="number" className="input-field" value={form.salaire_base} onChange={e => setForm({...form, salaire_base: e.target.value})} />
-                  </div>
-                  <div className="input-group">
-                    <label>Primes & Indemnités</label>
-                    <input type="number" className="input-field" value={form.primes} onChange={e => setForm({...form, primes: e.target.value})} />
-                  </div>
-                </div>
-                <div style={{textAlign:'right', fontWeight:'700', color:'var(--text-secondary)'}}>
-                  Brut: {formatMoney(brut)}
-                </div>
-              </div>
+                        {/* 4. TOTAL NET */}
+                        <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)', borderRadius: 16, padding: 20, color: 'white', textAlign: 'center', marginBottom: 30, boxShadow: '0 10px 25px -5px rgba(59, 130, 246, 0.5)' }}>
+                            <span style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: 500, letterSpacing: '1px' }}>NET À PAYER</span>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 800, marginTop: 5 }}>{netAPayer.toLocaleString()} <span style={{fontSize:'1.2rem'}}>FCFA</span></div>
+                        </div>
 
-              <div className="form-grid">
-                <div className="input-group">
-                  <label>Cotisations Sociales</label>
-                  <input type="number" className="input-field" value={form.cotisations} onChange={e => setForm({...form, cotisations: e.target.value})} />
-                </div>
-                <div className="input-group">
-                  <label>Impôts (IRPP)</label>
-                  <input type="number" className="input-field" value={form.impots} onChange={e => setForm({...form, impots: e.target.value})} />
-                </div>
-              </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 15 }}>
+                            <GlassButton onClick={() => setIsModalOpen(false)} theme={theme}>Annuler</GlassButton>
+                            <PrimaryButton type="submit">Générer le Bulletin</PrimaryButton>
+                        </div>
+                    </form>
+                </motion.div>
+             </div>
+        )}
+        </AnimatePresence>
 
-              <div className="summary-box">
-                <div style={{fontSize:'12px', color:'var(--text-secondary)', marginBottom:'5px'}}>NET À PAYER</div>
-                <div className="summary-val">{formatMoney(net)}</div>
-              </div>
-
-              <div style={{display:'flex', gap:'10px', justifyContent:'flex-end'}}>
-                <button type="button" onClick={() => setIsModalOpen(false)} style={{padding:'12px 24px', borderRadius:'12px', border:'none', background:'var(--input-bg)', color:'var(--text-primary)', cursor:'pointer'}}>Annuler</button>
-                <button type="submit" className="btn-primary">Générer le bulletin</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+
+// --- SUB COMPONENTS (Design System) ---
+
+function PrimaryButton({ children, onClick, type="button" }) {
+    return (
+        <motion.button 
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            type={type} onClick={onClick}
+            style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 10px 20px -5px rgba(59, 130, 246, 0.4)' }}
+        >
+            {children}
+        </motion.button>
+    )
+}
+
+function GlassButton({ children, onClick, theme, icon }) {
+    return (
+        <motion.button 
+            whileHover={{ scale: 1.05, backgroundColor: theme.border }} whileTap={{ scale: 0.95 }}
+            onClick={onClick}
+            style={{ background: theme.card, border: `1px solid ${theme.border}`, color: theme.text, padding: icon ? '12px' : '12px 20px', borderRadius: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(10px)' }}
+        >
+            {children}
+        </motion.button>
+    )
+}
+
+function FormGroup({ label, children, theme }) {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: theme.textMuted, marginLeft: 5 }}>{label}</label>
+            {children}
+        </div>
+    )
+}
+
+const inputStyle = (theme) => ({
+    width: '100%', padding: '12px 16px', borderRadius: '12px', border: `1px solid ${theme.border}`, background: theme.inputBg, color: theme.text, outline: 'none', transition: 'all 0.2s', fontSize: '0.95rem'
+});
