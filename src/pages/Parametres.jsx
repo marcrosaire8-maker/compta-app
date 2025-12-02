@@ -62,7 +62,8 @@ export default function ParametresUltimate() {
     date_debut: `${new Date().getFullYear()}-01-01`,
     date_fin: `${new Date().getFullYear()}-12-31`
   });
-  const [newMember, setNewMember] = useState({ email: '', role: 'LECTEUR' });
+  // MODIFIÉ : Ajout du champ password
+  const [newMember, setNewMember] = useState({ email: '', role: 'LECTEUR', password: '' });
 
   useEffect(() => {
     const handleResize = () => { if(window.innerWidth > 1024) setIsMobileMenuOpen(false); };
@@ -142,10 +143,18 @@ export default function ParametresUltimate() {
   const handleAddMember = async (e) => {
     e.preventDefault();
     try {
-      const { error } = await supabase.from('membres_entreprise').insert([{ entreprise_id: entreprise.id, ...newMember }]);
+      // MODIFIÉ : Enregistrement de l'email, rôle et du mot de passe initial
+      const { error } = await supabase.from('membres_entreprise').insert([
+        { 
+          entreprise_id: entreprise.id, 
+          email: newMember.email, 
+          role: newMember.role, 
+          mot_de_passe_initial: newMember.password // Assurez-vous d'avoir ce champ dans votre table 'membres_entreprise'
+        }
+      ]);
       if (error) throw error;
       alert("Membre ajouté !");
-      setNewMember({ email: '', role: 'LECTEUR' });
+      setNewMember({ email: '', role: 'LECTEUR', password: '' }); // Réinitialisation complète
       fetchMembres(entreprise.id);
     } catch (err) { alert("Erreur : " + err.message); }
   };
@@ -329,6 +338,20 @@ export default function ParametresUltimate() {
                   <label className="form-label">Email</label>
                   <input className="form-input" type="email" required placeholder="collegue@entreprise.com" value={newMember.email} onChange={e => setNewMember({...newMember, email: e.target.value})} />
                 </div>
+                
+                {/* NOUVEAU CHAMP : Mot de passe initial */}
+                <div className="form-group">
+                  <label className="form-label">Mot de passe initial</label>
+                  <input 
+                    className="form-input" 
+                    type="password" 
+                    required 
+                    placeholder="Mot de passe" 
+                    value={newMember.password} 
+                    onChange={e => setNewMember({...newMember, password: e.target.value})} 
+                  />
+                </div>
+                
                 <div className="form-group">
                   <label className="form-label">Rôle</label>
                   <select className="form-input" value={newMember.role} onChange={e => setNewMember({...newMember, role: e.target.value})}>
